@@ -1,0 +1,346 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUserAccount(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             data.role in ['PARENT', 'CHILD'] &&
+             data.familyId is string && isValidId(data.familyId) &&
+             (!('linkedChildId' in data) || (data.linkedChildId is string && isValidId(data.linkedChildId))) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidFamily(data) {
+      return data.ownerId is string && isValidId(data.ownerId) &&
+             data.familyName is string && data.familyName.size() >= 1 && data.familyName.size() <= 60 &&
+             data.inviteCode is string && data.inviteCode.size() == 6 && data.inviteCode.matches('^[A-Z0-9]{6}$') &&
+             data.parentPinHash is string && data.parentPinHash.size() == 64 &&
+             data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 12 &&
+             data.ownerId in data.memberUids &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidInviteCode(data) {
+      return data.familyId is string && isValidId(data.familyId) &&
+             data.ownerId is string && isValidId(data.ownerId) &&
+             data.familyName is string && data.familyName.size() >= 1 && data.familyName.size() <= 60 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidChildProfile(data) {
+      return data.familyId is string && isValidId(data.familyId) &&
+             data.ownerId is string && isValidId(data.ownerId) &&
+             data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 12 &&
+             data.ownerId in data.memberUids &&
+             (!('linkedUid' in data) || (data.linkedUid is string && isValidId(data.linkedUid))) &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 40 &&
+             data.age is int && data.age >= 5 && data.age <= 18 &&
+             data.gradeLevel is string && data.gradeLevel.size() >= 1 && data.gradeLevel.size() <= 30 &&
+             data.avatarKey is string && data.avatarKey.size() >= 1 && data.avatarKey.size() <= 30 &&
+             data.pinHash is string && data.pinHash.size() == 64 &&
+             data.lessonsCount is int && data.lessonsCount >= 0 && data.lessonsCount <= 10000 &&
+             data.quizzesTaken is int && data.quizzesTaken >= 0 && data.quizzesTaken <= 10000 &&
+             data.totalCorrect is int && data.totalCorrect >= 0 && data.totalCorrect <= 100000 &&
+             data.totalQuestions is int && data.totalQuestions >= 0 && data.totalQuestions <= 100000 &&
+             (!('xp' in data) || (data.xp is int && data.xp >= 0 && data.xp <= 10000000)) &&
+             (!('bestStreak' in data) || (data.bestStreak is int && data.bestStreak >= 0 && data.bestStreak <= 1000)) &&
+             (!('badges' in data) || (data.badges is list && data.badges.size() <= 30)) &&
+             (!('acquiredSkills' in data) || (data.acquiredSkills is list && data.acquiredSkills.size() <= 40)) &&
+             (!('weakPoints' in data) || (data.weakPoints is list && data.weakPoints.size() <= 40)) &&
+             (!('weeklyMissedQuestions' in data) || (data.weeklyMissedQuestions is list && data.weeklyMissedQuestions.size() <= 40)) &&
+             (!('lastSundayQuizWeekKey' in data) || data.lastSundayQuizWeekKey == null || (data.lastSundayQuizWeekKey is string && data.lastSundayQuizWeekKey.size() <= 20)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidLesson(data) {
+      return data.familyId is string && isValidId(data.familyId) &&
+             data.ownerId is string && isValidId(data.ownerId) &&
+             data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 12 &&
+             data.ownerId in data.memberUids &&
+             data.childId is string && isValidId(data.childId) &&
+             data.childName is string && data.childName.size() >= 1 && data.childName.size() <= 40 &&
+             data.gradeLevel is string && data.gradeLevel.size() >= 1 && data.gradeLevel.size() <= 30 &&
+             data.childAge is int && data.childAge >= 5 && data.childAge <= 18 &&
+             data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 40 &&
+             (!('documentType' in data) || (data.documentType in ['Cours', 'Exercice', 'Devoir'])) &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.sourceNotes is string && data.sourceNotes.size() <= 4000 &&
+             data.summaryIntro is string && data.summaryIntro.size() >= 1 && data.summaryIntro.size() <= 2000 &&
+             data.keyPoints is list && data.keyPoints.size() >= 1 && data.keyPoints.size() <= 12 &&
+             data.keyPoints[0] is string &&
+             data.simpleExplanation is string && data.simpleExplanation.size() >= 1 && data.simpleExplanation.size() <= 6000 &&
+             data.memoryTip is string && data.memoryTip.size() <= 1000 &&
+             (!('acquiredSkills' in data) || (data.acquiredSkills is list && data.acquiredSkills.size() <= 15)) &&
+             (!('weakPoints' in data) || (data.weakPoints is list && data.weakPoints.size() <= 15)) &&
+             (!('evaluationSummary' in data) || (data.evaluationSummary is string && data.evaluationSummary.size() <= 1500)) &&
+             data.photoAttached is bool &&
+             (!('attachedFiles' in data) || (data.attachedFiles is list && data.attachedFiles.size() <= 20)) &&
+             data.quizCount is int && data.quizCount >= 0 && data.quizCount <= 100 &&
+             (!('bestScorePercent' in data) || (data.bestScorePercent is int && data.bestScorePercent >= 0 && data.bestScorePercent <= 100)) &&
+             data.attemptsCount is int && data.attemptsCount >= 0 && data.attemptsCount <= 1000 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidQuiz(data) {
+      return data.familyId is string && isValidId(data.familyId) &&
+             data.ownerId is string && isValidId(data.ownerId) &&
+             data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 12 &&
+             data.ownerId in data.memberUids &&
+             data.lessonId is string && isValidId(data.lessonId) &&
+             data.childId is string && isValidId(data.childId) &&
+             data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 40 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.difficulty in ['Facile', 'Moyen', 'Défi'] &&
+             data.questions is list && data.questions.size() >= 1 && data.questions.size() <= 10 &&
+             (!('targetedGaps' in data) || (data.targetedGaps is list && data.targetedGaps.size() <= 15)) &&
+             (!('weeklyReview' in data) || data.weeklyReview is bool) &&
+             (!('weekKey' in data) || (data.weekKey is string && data.weekKey.size() <= 20)) &&
+             (!('lastScorePercent' in data) || (data.lastScorePercent is int && data.lastScorePercent >= 0 && data.lastScorePercent <= 100)) &&
+             data.attemptsCount is int && data.attemptsCount >= 0 && data.attemptsCount <= 1000 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidQuizAttempt(data) {
+      return data.familyId is string && isValidId(data.familyId) &&
+             data.ownerId is string && isValidId(data.ownerId) &&
+             data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 12 &&
+             data.ownerId in data.memberUids &&
+             data.childId is string && isValidId(data.childId) &&
+             data.childName is string && data.childName.size() >= 1 && data.childName.size() <= 40 &&
+             data.lessonId is string && isValidId(data.lessonId) &&
+             data.lessonTitle is string && data.lessonTitle.size() >= 1 && data.lessonTitle.size() <= 120 &&
+             data.quizId is string && isValidId(data.quizId) &&
+             data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 40 &&
+             data.score is int && data.score >= 0 && data.score <= 20 &&
+             data.totalQuestions is int && data.totalQuestions >= 1 && data.totalQuestions <= 20 &&
+             data.score <= data.totalQuestions &&
+             data.percentage is int && data.percentage >= 0 && data.percentage <= 100 &&
+             (!('xpEarned' in data) || (data.xpEarned is int && data.xpEarned >= 0 && data.xpEarned <= 5000)) &&
+             (!('maxStreak' in data) || (data.maxStreak is int && data.maxStreak >= 0 && data.maxStreak <= 50)) &&
+             (!('masteredSkills' in data) || (data.masteredSkills is list && data.masteredSkills.size() <= 20)) &&
+             (!('weakSkills' in data) || (data.weakSkills is list && data.weakSkills.size() <= 20)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidFamilyMessage(data) {
+      return data.familyId is string && isValidId(data.familyId) &&
+             data.ownerId is string && isValidId(data.ownerId) &&
+             data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 12 &&
+             data.ownerId in data.memberUids &&
+             data.channelId is string && isValidId(data.channelId) &&
+             data.senderRole in ['PARENT', 'CHILD'] &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 60 &&
+             data.senderUid is string && isValidId(data.senderUid) &&
+             data.text is string && data.text.size() >= 1 && data.text.size() <= 1000 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'role', 'familyId', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'role', 'familyId', 'linkedChildId', 'createdAt', 'updatedAt']) &&
+                       isValidUserAccount(incoming());
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUserAccount(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'role', 'familyId', 'linkedChildId', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    match /invite_codes/{code} {
+      allow get: if isSignedIn() && isValidId(code);
+      allow list: if false;
+      allow create: if isSignedIn() &&
+                       isValidId(code) &&
+                       code.size() == 6 &&
+                       incoming().ownerId == request.auth.uid &&
+                       incoming().familyId == request.auth.uid &&
+                       incoming().keys().hasAll(['familyId', 'ownerId', 'familyName', 'createdAt']) &&
+                       incoming().keys().hasOnly(['familyId', 'ownerId', 'familyName', 'createdAt']) &&
+                       isValidInviteCode(incoming());
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(code) && existing().ownerId == request.auth.uid;
+    }
+
+    match /families/{familyId} {
+      allow get: if isSignedIn() && isValidId(familyId) && (request.auth.uid == familyId || (resource != null && request.auth.uid in existing().memberUids));
+      allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+      allow create: if isSignedIn() &&
+                       isValidId(familyId) &&
+                       familyId == request.auth.uid &&
+                       incoming().ownerId == request.auth.uid &&
+                       incoming().memberUids.size() == 1 &&
+                       incoming().keys().hasAll(['ownerId', 'familyName', 'inviteCode', 'parentPinHash', 'memberUids', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['ownerId', 'familyName', 'inviteCode', 'parentPinHash', 'memberUids', 'createdAt', 'updatedAt']) &&
+                       isValidFamily(incoming());
+      allow update: if isSignedIn() &&
+                       isValidId(familyId) &&
+                       isValidFamily(incoming()) &&
+                       incoming().ownerId == existing().ownerId &&
+                       incoming().createdAt == existing().createdAt && (
+                         (request.auth.uid == existing().ownerId &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['familyName', 'parentPinHash', 'inviteCode', 'memberUids', 'updatedAt'])) ||
+                         (exists(/databases/$(database)/documents/invite_codes/$(existing().inviteCode)) &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt']) &&
+                          incoming().memberUids.hasAll(existing().memberUids) &&
+                          (incoming().memberUids.size() == existing().memberUids.size() + 1 ||
+                           (request.auth.uid in existing().memberUids && incoming().memberUids.size() == existing().memberUids.size())) &&
+                          request.auth.uid in incoming().memberUids)
+                       );
+      allow delete: if isSignedIn() && isValidId(familyId) && request.auth.uid == existing().ownerId;
+
+      match /children/{childId} {
+        allow get: if isSignedIn() && isValidId(familyId) && isValidId(childId) && request.auth.uid in existing().memberUids;
+        allow list: if isSignedIn() && isValidId(familyId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() &&
+                         isValidId(familyId) &&
+                         isValidId(childId) &&
+                         isValidChildProfile(incoming()) &&
+                         incoming().familyId == familyId &&
+                         incoming().keys().hasAll(['familyId', 'ownerId', 'memberUids', 'name', 'age', 'gradeLevel', 'avatarKey', 'pinHash', 'lessonsCount', 'quizzesTaken', 'totalCorrect', 'totalQuestions', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['familyId', 'ownerId', 'memberUids', 'linkedUid', 'name', 'age', 'gradeLevel', 'avatarKey', 'pinHash', 'lessonsCount', 'quizzesTaken', 'totalCorrect', 'totalQuestions', 'xp', 'bestStreak', 'badges', 'acquiredSkills', 'weakPoints', 'weeklyMissedQuestions', 'lastSundayQuizWeekKey', 'createdAt', 'updatedAt']) &&
+                         exists(/databases/$(database)/documents/families/$(familyId)) &&
+                         request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUids &&
+                         incoming().ownerId == get(/databases/$(database)/documents/families/$(familyId)).data.ownerId &&
+                         request.auth.uid in incoming().memberUids;
+        allow update: if isSignedIn() &&
+                         isValidId(familyId) &&
+                         isValidId(childId) &&
+                         request.auth.uid in existing().memberUids &&
+                         isValidChildProfile(incoming()) &&
+                         incoming().familyId == existing().familyId &&
+                         incoming().ownerId == existing().ownerId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'age', 'gradeLevel', 'avatarKey', 'pinHash', 'linkedUid', 'memberUids', 'lessonsCount', 'quizzesTaken', 'totalCorrect', 'totalQuestions', 'xp', 'bestStreak', 'badges', 'acquiredSkills', 'weakPoints', 'weeklyMissedQuestions', 'lastSundayQuizWeekKey', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(familyId) && isValidId(childId) && request.auth.uid == existing().ownerId;
+      }
+
+      match /lessons/{lessonId} {
+        allow get: if isSignedIn() && isValidId(familyId) && isValidId(lessonId) && request.auth.uid in existing().memberUids;
+        allow list: if isSignedIn() && isValidId(familyId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() &&
+                         isValidId(familyId) &&
+                         isValidId(lessonId) &&
+                         isValidLesson(incoming()) &&
+                         incoming().familyId == familyId &&
+                         incoming().keys().hasAll(['familyId', 'ownerId', 'memberUids', 'childId', 'childName', 'gradeLevel', 'childAge', 'subject', 'title', 'sourceNotes', 'summaryIntro', 'keyPoints', 'simpleExplanation', 'memoryTip', 'photoAttached', 'quizCount', 'attemptsCount', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['familyId', 'ownerId', 'memberUids', 'childId', 'childName', 'gradeLevel', 'childAge', 'subject', 'documentType', 'title', 'sourceNotes', 'summaryIntro', 'keyPoints', 'simpleExplanation', 'memoryTip', 'acquiredSkills', 'weakPoints', 'evaluationSummary', 'photoAttached', 'attachedFiles', 'quizCount', 'bestScorePercent', 'attemptsCount', 'createdAt', 'updatedAt']) &&
+                         exists(/databases/$(database)/documents/families/$(familyId)) &&
+                         request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUids &&
+                         incoming().ownerId == get(/databases/$(database)/documents/families/$(familyId)).data.ownerId &&
+                         request.auth.uid in incoming().memberUids;
+        allow update: if isSignedIn() &&
+                         isValidId(familyId) &&
+                         isValidId(lessonId) &&
+                         request.auth.uid in existing().memberUids &&
+                         isValidLesson(incoming()) &&
+                         incoming().familyId == existing().familyId &&
+                         incoming().ownerId == existing().ownerId &&
+                         incoming().childId == existing().childId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['documentType', 'sourceNotes', 'summaryIntro', 'keyPoints', 'simpleExplanation', 'memoryTip', 'acquiredSkills', 'weakPoints', 'evaluationSummary', 'photoAttached', 'attachedFiles', 'quizCount', 'bestScorePercent', 'attemptsCount', 'memberUids', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(familyId) && isValidId(lessonId) && request.auth.uid in existing().memberUids;
+      }
+
+      match /quizzes/{quizId} {
+        allow get: if isSignedIn() && isValidId(familyId) && isValidId(quizId) && request.auth.uid in existing().memberUids;
+        allow list: if isSignedIn() && isValidId(familyId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() &&
+                         isValidId(familyId) &&
+                         isValidId(quizId) &&
+                         isValidQuiz(incoming()) &&
+                         incoming().familyId == familyId &&
+                         incoming().keys().hasAll(['familyId', 'ownerId', 'memberUids', 'lessonId', 'childId', 'subject', 'title', 'difficulty', 'questions', 'attemptsCount', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['familyId', 'ownerId', 'memberUids', 'lessonId', 'childId', 'subject', 'title', 'difficulty', 'questions', 'targetedGaps', 'weeklyReview', 'weekKey', 'lastScorePercent', 'attemptsCount', 'createdAt', 'updatedAt']) &&
+                         exists(/databases/$(database)/documents/families/$(familyId)) &&
+                         request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUids &&
+                         incoming().ownerId == get(/databases/$(database)/documents/families/$(familyId)).data.ownerId &&
+                         request.auth.uid in incoming().memberUids;
+        allow update: if isSignedIn() &&
+                         isValidId(familyId) &&
+                         isValidId(quizId) &&
+                         request.auth.uid in existing().memberUids &&
+                         isValidQuiz(incoming()) &&
+                         incoming().familyId == existing().familyId &&
+                         incoming().ownerId == existing().ownerId &&
+                         incoming().lessonId == existing().lessonId &&
+                         incoming().childId == existing().childId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['lastScorePercent', 'attemptsCount', 'memberUids', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(familyId) && isValidId(quizId) && request.auth.uid in existing().memberUids;
+      }
+
+      match /quiz_attempts/{attemptId} {
+        allow get: if isSignedIn() && isValidId(familyId) && isValidId(attemptId) && request.auth.uid in existing().memberUids;
+        allow list: if isSignedIn() && isValidId(familyId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() &&
+                         isValidId(familyId) &&
+                         isValidId(attemptId) &&
+                         isValidQuizAttempt(incoming()) &&
+                         incoming().familyId == familyId &&
+                         incoming().keys().hasAll(['familyId', 'ownerId', 'memberUids', 'childId', 'childName', 'lessonId', 'lessonTitle', 'quizId', 'subject', 'score', 'totalQuestions', 'percentage', 'createdAt']) &&
+                         incoming().keys().hasOnly(['familyId', 'ownerId', 'memberUids', 'childId', 'childName', 'lessonId', 'lessonTitle', 'quizId', 'subject', 'score', 'totalQuestions', 'percentage', 'xpEarned', 'maxStreak', 'masteredSkills', 'weakSkills', 'createdAt']) &&
+                         exists(/databases/$(database)/documents/families/$(familyId)) &&
+                         request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUids &&
+                         incoming().ownerId == get(/databases/$(database)/documents/families/$(familyId)).data.ownerId &&
+                         request.auth.uid in incoming().memberUids;
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(familyId) && isValidId(attemptId) && request.auth.uid == existing().ownerId;
+      }
+
+      match /family_messages/{messageId} {
+        allow get: if isSignedIn() && isValidId(familyId) && isValidId(messageId) && request.auth.uid in existing().memberUids;
+        allow list: if isSignedIn() && isValidId(familyId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() &&
+                         isValidId(familyId) &&
+                         isValidId(messageId) &&
+                         isValidFamilyMessage(incoming()) &&
+                         incoming().familyId == familyId &&
+                         incoming().senderUid == request.auth.uid &&
+                         incoming().keys().hasAll(['familyId', 'ownerId', 'memberUids', 'channelId', 'senderRole', 'senderName', 'senderUid', 'text', 'createdAt']) &&
+                         incoming().keys().hasOnly(['familyId', 'ownerId', 'memberUids', 'channelId', 'senderRole', 'senderName', 'senderUid', 'text', 'createdAt']) &&
+                         exists(/databases/$(database)/documents/families/$(familyId)) &&
+                         request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUids &&
+                         incoming().ownerId == get(/databases/$(database)/documents/families/$(familyId)).data.ownerId &&
+                         request.auth.uid in incoming().memberUids;
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(familyId) && isValidId(messageId) && (request.auth.uid == existing().ownerId || request.auth.uid == existing().senderUid);
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Quizzy</string>
+    <string name="app_tagline">L\'assistant devoirs de la famille</string>
+    <string name="sign_in_google">Se connecter avec Google</string>
+    <string name="parent_admin_label">Espace Parent (Admin)</string>
+    <string name="child_space_label">Espace Enfant</string>
+    <string name="deposit_course_cta">Déposer un cours</string>
+</resources>

@@ -1,0 +1,2036 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quizzy — Documentation Produit, Fonctionnelle, Technique &amp; QA</title>
+  <style>
+    :root {
+      --bg: #FBF8F1;
+      --surface: #FFFFFF;
+      --surface-soft: #F4EFE4;
+      --surface-mint: #E6F7F4;
+      --surface-yellow: #FFF4CE;
+      --surface-coral: #FFF0EB;
+      --surface-blue: #EAF2FF;
+      --navy: #102247;
+      --navy-soft: #2A3F68;
+      --text: #1B2A4A;
+      --text-muted: #5A6B88;
+      --primary: #0E8F98;
+      --primary-dark: #0A6F77;
+      --coral: #FF7A59;
+      --coral-dark: #D95535;
+      --yellow: #F5B82E;
+      --success: #1D9A6C;
+      --border: #E5DFD3;
+      --shadow: 0 10px 28px rgba(16, 34, 71, 0.06);
+      --shadow-sm: 0 4px 12px rgba(16, 34, 71, 0.05);
+      --code-bg: #111D35;
+      --code-text: #EDF2FA;
+      --radius-lg: 22px;
+      --radius-md: 14px;
+      --radius-sm: 10px;
+      --sidebar-w: 290px;
+    }
+
+    [data-theme="dark"] {
+      --bg: #0D1628;
+      --surface: #15223B;
+      --surface-soft: #1C2D4D;
+      --surface-mint: #123339;
+      --surface-yellow: #342B18;
+      --surface-coral: #38201E;
+      --surface-blue: #18294A;
+      --navy: #F5F8FF;
+      --navy-soft: #C7D4EC;
+      --text: #E9EFFA;
+      --text-muted: #9BAAC7;
+      --primary: #25C5CF;
+      --primary-dark: #1AA2AB;
+      --coral: #FF8769;
+      --coral-dark: #FF6E4B;
+      --yellow: #FFD166;
+      --success: #35C78E;
+      --border: #26395E;
+      --shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+      --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.24);
+      --code-bg: #0A1120;
+      --code-text: #E9F1FF;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Inter", "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      font-size: 15.5px;
+    }
+
+    /* Layout */
+    .app-shell {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      width: var(--sidebar-w);
+      position: fixed;
+      inset: 0 auto 0 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      z-index: 50;
+      transition: transform 0.25s ease;
+    }
+
+    .sidebar-header {
+      padding: 22px 22px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-badge {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: #FBF8F1;
+      border: 1px solid var(--border);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .brand-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      font-weight: 600;
+    }
+
+    .sidebar-nav {
+      padding: 14px 12px 24px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .nav-group-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      font-weight: 700;
+      padding: 10px 12px 6px;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .nav-link:hover {
+      background: var(--surface-soft);
+    }
+
+    .nav-link.active {
+      background: var(--surface-mint);
+      color: var(--primary-dark);
+    }
+
+    [data-theme="dark"] .nav-link.active {
+      color: var(--primary);
+    }
+
+    .nav-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 8px;
+      background: var(--surface-soft);
+      color: var(--navy);
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .nav-link.active .nav-num {
+      background: var(--primary);
+      color: #FFFFFF;
+    }
+
+    .sidebar-footer {
+      padding: 14px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      padding: 9px 13px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      transition: transform 0.12s, background 0.15s, border-color 0.15s;
+      text-decoration: none;
+    }
+
+    .btn:hover {
+      background: var(--surface-soft);
+      border-color: var(--primary);
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #FFFFFF;
+      border-color: transparent;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      color: #FFFFFF;
+    }
+
+    .btn-coral {
+      background: var(--coral);
+      color: #FFFFFF;
+      border-color: transparent;
+    }
+
+    .main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      padding: 34px 42px 80px;
+      max-width: calc(100% - var(--sidebar-w));
+    }
+
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    /* Mobile top bar */
+    .mobile-bar {
+      display: none;
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Hero */
+    .hero {
+      background: linear-gradient(135deg, var(--surface) 0%, var(--surface-mint) 62%, var(--surface-yellow) 100%);
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      padding: 34px 36px;
+      box-shadow: var(--shadow);
+      margin-bottom: 34px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-top {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+    }
+
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--primary-dark);
+      font-weight: 800;
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      margin-bottom: 14px;
+    }
+
+    [data-theme="dark"] .hero-pill {
+      color: var(--primary);
+    }
+
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: clamp(26px, 3vw, 36px);
+      line-height: 1.2;
+      color: var(--navy);
+      letter-spacing: -0.02em;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 760px;
+      color: var(--navy-soft);
+      font-size: 16px;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .meta-card {
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 13px 15px;
+    }
+
+    [data-theme="dark"] .meta-card {
+      background: rgba(21, 34, 59, 0.88);
+    }
+
+    .meta-label {
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+
+    .meta-value {
+      font-size: 14.5px;
+      font-weight: 800;
+      color: var(--navy);
+      margin-top: 2px;
+      word-break: break-word;
+    }
+
+    /* Sections */
+    section.doc-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px 34px;
+      margin-bottom: 28px;
+      box-shadow: var(--shadow-sm);
+      scroll-margin-top: 24px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding-bottom: 16px;
+      margin-bottom: 22px;
+      border-bottom: 2px solid var(--surface-soft);
+    }
+
+    .section-badge {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: var(--primary);
+      color: #FFFFFF;
+      font-weight: 900;
+      font-size: 18px;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .section-badge.coral { background: var(--coral); }
+    .section-badge.navy { background: #102247; color: #FFFFFF; }
+    .section-badge.success { background: var(--success); }
+
+    .section-header h2 {
+      margin: 0;
+      font-size: 24px;
+      color: var(--navy);
+      line-height: 1.25;
+    }
+
+    .section-header .section-sub {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    h3 {
+      color: var(--navy);
+      font-size: 18px;
+      margin: 26px 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h4 {
+      color: var(--navy);
+      font-size: 15.5px;
+      margin: 18px 0 8px;
+    }
+
+    p { margin: 0 0 12px; }
+    ul, ol { margin: 0 0 14px; padding-left: 20px; }
+    li { margin-bottom: 6px; }
+
+    /* Cards & Grids */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin: 14px 0 18px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin: 14px 0 18px;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin: 14px 0 18px;
+    }
+
+    .card {
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 18px;
+    }
+
+    .card.mint { background: var(--surface-mint); }
+    .card.yellow { background: var(--surface-yellow); }
+    .card.coral { background: var(--surface-coral); }
+    .card.blue { background: var(--surface-blue); }
+
+    .card-title {
+      font-weight: 800;
+      color: var(--navy);
+      margin-bottom: 6px;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .callout {
+      border-left: 4px solid var(--primary);
+      background: var(--surface-mint);
+      padding: 15px 18px;
+      border-radius: 0 14px 14px 0;
+      margin: 16px 0;
+    }
+
+    .callout.coral {
+      border-left-color: var(--coral);
+      background: var(--surface-coral);
+    }
+
+    .callout.yellow {
+      border-left-color: var(--yellow);
+      background: var(--surface-yellow);
+    }
+
+    .callout strong { color: var(--navy); }
+
+    /* Tags & Badges */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .pill-pass { background: #D7F5E9; color: #0F6B48; }
+    .pill-warn { background: #FFF0C2; color: #8A5A00; }
+    .pill-coral { background: #FFE2DA; color: #A93419; }
+    .pill-info { background: #DCEEFF; color: #154C8B; }
+    .pill-p0 { background: #FFE2DA; color: #A93419; }
+    .pill-p1 { background: #FFF0C2; color: #8A5A00; }
+    .pill-p2 { background: #DCEEFF; color: #154C8B; }
+
+    [data-theme="dark"] .pill-pass { background: #144333; color: #67E8B5; }
+    [data-theme="dark"] .pill-warn { background: #463712; color: #FFD97D; }
+    [data-theme="dark"] .pill-coral { background: #4E221A; color: #FFA28C; }
+    [data-theme="dark"] .pill-info { background: #1A355C; color: #8AC2FF; }
+
+    /* Tables */
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      margin: 14px 0 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      background: var(--surface);
+    }
+
+    th {
+      background: var(--surface-soft);
+      color: var(--navy);
+      font-weight: 800;
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--surface-soft); }
+
+    code {
+      font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.88em;
+      background: var(--surface-soft);
+      color: var(--navy);
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+
+    /* Code blocks */
+    .code-box {
+      background: var(--code-bg);
+      color: var(--code-text);
+      border-radius: 16px;
+      overflow: hidden;
+      margin: 14px 0 18px;
+      border: 1px solid #24375C;
+    }
+
+    .code-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #9CC7FF;
+    }
+
+    .copy-btn {
+      background: rgba(255, 255, 255, 0.1);
+      color: #FFFFFF;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .copy-btn:hover { background: var(--primary); border-color: var(--primary); }
+
+    pre {
+      margin: 0;
+      padding: 16px 18px;
+      overflow-x: auto;
+      font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      font-size: inherit;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .tab-btn {
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .tab-btn.active {
+      background: var(--primary);
+      color: #FFFFFF;
+      border-color: var(--primary);
+    }
+
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* Filter toolbar for manual tests */
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 14px 0;
+      align-items: center;
+    }
+
+    .input, .select {
+      padding: 9px 13px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .input { flex: 1; min-width: 220px; }
+
+    /* Swatches */
+    .swatch-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 12px 0 18px;
+    }
+
+    .swatch {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      border-radius: 12px;
+    }
+
+    .swatch-dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+    }
+
+    /* Report KPI & Charts */
+    .kpi-card {
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px 20px;
+      text-align: left;
+    }
+
+    .kpi-value {
+      font-size: 30px;
+      font-weight: 900;
+      color: var(--navy);
+      line-height: 1.1;
+    }
+
+    .kpi-value.success { color: var(--success); }
+    .kpi-value.primary { color: var(--primary); }
+    .kpi-value.coral { color: var(--coral); }
+
+    .kpi-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 700;
+      margin-top: 4px;
+    }
+
+    .bar-row {
+      margin-bottom: 13px;
+    }
+
+    .bar-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13.5px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    .bar-track {
+      height: 11px;
+      background: var(--surface-soft);
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--primary), var(--success));
+    }
+
+    .diagram-box {
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
+      overflow-x: auto;
+      margin: 16px 0;
+      text-align: center;
+    }
+
+    details {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 16px;
+      margin-bottom: 10px;
+      background: var(--surface);
+    }
+
+    summary {
+      font-weight: 800;
+      color: var(--navy);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      list-style: none;
+    }
+
+    summary::-webkit-details-marker { display: none; }
+
+    /* Responsive */
+    @media (max-width: 980px) {
+      .sidebar {
+        transform: translateX(-100%);
+        box-shadow: var(--shadow);
+      }
+      .sidebar.open { transform: translateX(0); }
+      .mobile-bar { display: flex; }
+      .main {
+        margin-left: 0;
+        max-width: 100%;
+        padding: 20px 16px 60px;
+      }
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+      section.doc-section { padding: 22px 18px; }
+      .hero { padding: 24px 20px; }
+    }
+
+    /* Print / PDF */
+    @media print {
+      .sidebar, .mobile-bar, .no-print, .copy-btn, .toolbar { display: none !important; }
+      .main { margin-left: 0 !important; max-width: 100% !important; padding: 0 !important; }
+      body { background: #FFFFFF !important; color: #111111 !important; font-size: 12px; }
+      section.doc-section, .hero { box-shadow: none !important; break-inside: avoid-page; }
+      .tab-pane { display: block !important; margin-bottom: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Mobile Header -->
+  <div class="mobile-bar no-print">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="btn" id="menuToggle" aria-label="Ouvrir le menu">☰ Sommaire</button>
+      <strong style="color:var(--navy);font-size:16px;">Quizzy Docs</strong>
+    </div>
+    <button class="btn" id="themeToggleMobile">🌗 Thème</button>
+  </div>
+
+  <div class="app-shell">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-row">
+          <div class="brand-badge" aria-hidden="true">
+            <!-- Inline Quizzy Open Book + Star Icon -->
+            <svg width="30" height="30" viewBox="0 0 64 64" fill="none">
+              <path d="M8 28C8 24 12 22 16 24L32 30L48 24C52 22 56 24 56 28V46C56 49 53 51 49 50L32 45L15 50C11 51 8 49 8 46V28Z" fill="#0B3B8C"/>
+              <path d="M13 24C13 21 16 19 20 20L32 25L44 20C48 19 51 21 51 24V42C51 44 48 46 45 45L32 41L19 45C16 46 13 44 13 42V24Z" fill="#06D6C7"/>
+              <path d="M32 10L35.2 16.8L42.6 17.8L37.2 22.9L38.6 30.2L32 26.6L25.4 30.2L26.8 22.9L21.4 17.8L28.8 16.8L32 10Z" fill="#FF6B50"/>
+            </svg>
+          </div>
+          <div>
+            <!-- Quizzy Wordmark -->
+            <svg height="24" viewBox="0 0 155 40" fill="none" aria-label="Quizzy">
+              <text x="0" y="30" font-family="Nunito, Inter, sans-serif" font-weight="900" font-size="34" fill="currentColor" style="color:var(--navy)">Q</text>
+              <path d="M16 25C20 24 23 30 27 33" stroke="#FF6B50" stroke-width="5.5" stroke-linecap="round"/>
+              <text x="30" y="30" font-family="Nunito, Inter, sans-serif" font-weight="900" font-size="31" fill="currentColor" style="color:var(--navy)">uizzy</text>
+              <circle cx="56.5" cy="7" r="4.2" fill="#06D6C7"/>
+            </svg>
+            <div class="brand-subtitle">Documentation Complète v1.0</div>
+          </div>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" aria-label="Sommaire de la documentation">
+        <div class="nav-group-title">Cadrage &amp; Produit</div>
+        <a class="nav-link active" href="#sec-edb"><span class="nav-num">1</span> EDB (Expression de Besoins)</a>
+        <a class="nav-link" href="#sec-fonctionnel"><span class="nav-num">2</span> Dossier fonctionnel</a>
+
+        <div class="nav-group-title">Ingénierie</div>
+        <a class="nav-link" href="#sec-technique"><span class="nav-num">3</span> Dossier technique</a>
+        <a class="nav-link" href="#sec-dev"><span class="nav-num">4</span> DEV (Développement)</a>
+
+        <div class="nav-group-title">Qualité &amp; Validation</div>
+        <a class="nav-link" href="#sec-plan-tests"><span class="nav-num">5</span> Plan de tests</a>
+        <a class="nav-link" href="#sec-tests-manuels"><span class="nav-num">6</span> Cas de tests manuels</a>
+        <a class="nav-link" href="#sec-playwright"><span class="nav-num">7</span> Tests automatisés (Playwright)</a>
+        <a class="nav-link" href="#sec-rapports"><span class="nav-num">8</span> Rapports de tests auto</a>
+      </nav>
+
+      <div class="sidebar-footer no-print">
+        <button class="btn" style="flex:1" id="themeToggle">🌗 Thème</button>
+        <button class="btn btn-primary" style="flex:1" onclick="window.print()">🖨️ PDF</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main">
+      <div class="container">
+
+        <!-- HERO -->
+        <header class="hero">
+          <div class="hero-top">
+            <div>
+              <div class="hero-pill">⭐ Application mobile éducative • Android Kotlin &amp; Jetpack Compose</div>
+              <h1>Documentation Projet — Quizzy</h1>
+              <p>
+                <strong>Quizzy</strong> aide l’enfant du primaire et du collège à transformer ses cours, exercices et devoirs en synthèses claires et en quiz adaptatifs bienveillants, tout en offrant aux parents un tableau de bord précis sur ses notes, ses acquis et ses lacunes.
+              </p>
+            </div>
+            <div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap;">
+              <a class="btn btn-primary" href="#sec-rapports">📊 Voir le rapport QA (53/53)</a>
+              <a class="btn btn-coral" href="#sec-playwright">🎭 Suite Playwright</a>
+            </div>
+          </div>
+
+          <div class="meta-grid">
+            <div class="meta-card">
+              <div class="meta-label">Identifiant App</div>
+              <div class="meta-value">com.aistudio.edufamille.kxmrpq</div>
+            </div>
+            <div class="meta-card">
+              <div class="meta-label">Plateforme &amp; SDK</div>
+              <div class="meta-value">Android • minSdk 24 / targetSdk 36</div>
+            </div>
+            <div class="meta-card">
+              <div class="meta-label">Stack Principale</div>
+              <div class="meta-value">Kotlin 2.4 • Compose M3 • Firebase AI</div>
+            </div>
+            <div class="meta-card">
+              <div class="meta-label">Statut Tests Auto</div>
+              <div class="meta-value" style="color:var(--success)">53 / 53 Réussis (100 %)</div>
+            </div>
+          </div>
+        </header>
+
+        <!-- ======================================================= -->
+        <!-- 1. EDB -->
+        <!-- ======================================================= -->
+        <section class="doc-section" id="sec-edb">
+          <div class="section-header">
+            <div class="section-badge">1</div>
+            <div>
+              <h2>EDB — Expression de Besoins</h2>
+              <div class="section-sub">Vision produit, objectifs pédagogiques, personas, périmètre et exigences clés</div>
+            </div>
+          </div>
+
+          <h3>1.1 Contexte et vision produit</h3>
+          <p>
+            Les révisions scolaires à la maison sont souvent source de friction : supports papier dispersés, fiches de cours difficiles à synthétiser pour un élève de primaire/collège, manque de temps côté parent pour concevoir des exercices ciblés, et sentiment d’échec lorsque l’enfant commet des erreurs.
+          </p>
+          <div class="callout">
+            <strong>Synthèse du besoin :</strong> Quizzy doit aider l’enfant à transformer ses cours en supports de révision faciles à comprendre et à pratiquer, tout en donnant au parent une vue claire de sa progression, de ses compétences acquises et des notions à retravailler.
+          </div>
+
+          <h3>1.2 Exigences fondamentales de l’application</h3>
+          <div class="grid-3">
+            <div class="card mint">
+              <div class="card-title">🧭 Navigation adaptée</div>
+              Proposer une navigation simple et épurée, adaptée à chaque profil (Espace Enfant focalisé sur <strong>Cours</strong> et <strong>Quiz</strong> ; Espace Parent orienté suivi et pilotage).
+            </div>
+            <div class="card blue">
+              <div class="card-title">📱 Lisibilité mobile</div>
+              Présenter les informations de manière claire, aérée et lisible sur mobile, avec grands boutons (≥ 48 dp), hiérarchie nette et contrastes conformes.
+            </div>
+            <div class="card coral">
+              <div class="card-title">🛡️ Protection des données</div>
+              Protéger les comptes et les données personnelles des enfants (authentification Google, codes PIN hachés SHA-256, isolement strict par famille Zero-Trust).
+            </div>
+            <div class="card yellow">
+              <div class="card-title">💛 Bienveillance &amp; Pédagogie</div>
+              Offrir une expérience encourageante sans culpabiliser l’enfant en cas d’erreur, et ne <strong>jamais</strong> lui donner la réponse directement mais l’orienter pas à pas.
+            </div>
+            <div class="card">
+              <div class="card-title">🎨 Cohérence visuelle</div>
+              Conserver une identité graphique chaleureuse et cohérente entre l’espace enfant et l’espace parent (palette turquoise doux, bleu profond, blanc cassé, accents corail et jaune).
+            </div>
+            <div class="card mint">
+              <div class="card-title">🎯 Remédiation ciblée</div>
+              Évaluer automatiquement les compétences acquises et les lacunes à partir des cours, exercices et devoirs afin de générer des quiz sur mesure.
+            </div>
+          </div>
+
+          <h3>1.3 Objectifs officiels de Quizzy</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Objectif Quizzy</th>
+                  <th>Indicateur de réussite (KPI)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><strong>OBJ-01</strong></td><td>Faciliter les révisions en transformant les cours de l’enfant en supports simples à consulter.</td><td>Dépôt photo/PDF/DOCX/voix → fiche structurée générée en &lt; 15 s.</td></tr>
+                <tr><td><strong>OBJ-02</strong></td><td>Rendre les cours plus compréhensibles grâce à des synthèses adaptées à son âge et à son niveau scolaire.</td><td>Synthèse calibrée du CP à la 3e (Idée principale, À retenir, Mots clés, Exemple).</td></tr>
+                <tr><td><strong>OBJ-03</strong></td><td>Encourager l’apprentissage actif avec des quiz basés sur les cours ajoutés.</td><td>Questions mixtes QCM + exercices à trous calqués sur la classe.</td></tr>
+                <tr><td><strong>OBJ-04</strong></td><td>Aider l’enfant à progresser à son rythme, sans le décourager lorsqu’il se trompe.</td><td>0 % de réponse dévoilée en cas d’erreur ; 100 % d’indices socratiques bienveillants.</td></tr>
+                <tr><td><strong>OBJ-05</strong></td><td>Permettre à l’enfant de suivre ses progrès dans les différentes matières.</td><td>Classement auto par matière, progression %, étoiles, niveaux XP (sans farming).</td></tr>
+                <tr><td><strong>OBJ-06</strong></td><td>Donner aux parents une meilleure visibilité sur l’activité et les résultats de leur enfant.</td><td>Tableau de bord parent : notes, graphique hebdo, acquis/lacunes, notifications nominatives.</td></tr>
+                <tr><td><strong>OBJ-07</strong></td><td>Proposer une utilisation simple sur mobile, adaptée aux besoins des enfants comme des parents.</td><td>Parcours enfant limité à 2 onglets principaux (Cours, Quiz) ; popups scrollables.</td></tr>
+                <tr><td><strong>OBJ-08</strong></td><td>Protéger les comptes et les données personnelles des enfants.</td><td>100 % des règles Firestore isolées par famille ; aucun accès anonyme ; Photo Picker sans permission stockage.</td></tr>
+                <tr><td><strong>OBJ-09</strong></td><td>Offrir une expérience cohérente entre l’espace enfant et l’espace parent.</td><td>Design system unifié Material 3, logo adaptatif clair/sombre, loader livre animé.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>1.4 Personas &amp; Périmètre</h3>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-title">🎒 Persona 1 — L’Enfant (ex. Lina, 9 ans, CM1)</div>
+              <ul>
+                <li>Prend en photo sa leçon, son exercice ou son devoir (ou importe un PDF/DOCX/notes).</li>
+                <li>Laisse l’app ranger automatiquement dans le bon dossier matière (Maths, Français, Anglais, Sciences…).</li>
+                <li>Relit une fiche courte et fait un quiz interactif (QCM ou texte à trous).</li>
+                <li>Reçoit des indices bienveillants sans spoiler lorsqu’elle hésite et débloque niveaux &amp; badges sur les nouveaux quiz.</li>
+              </ul>
+            </div>
+            <div class="card">
+              <div class="card-title">👨‍👩‍👧 Persona 2 — Le Parent (ex. Sophie / Karim)</div>
+              <ul>
+                <li>Crée la famille, gère les profils enfants (prénom, niveau, âge, avatar, PIN) et partage un code d’invitation 6 caractères.</li>
+                <li>Accède à son espace dédié protégé par un code PIN parent.</li>
+                <li>Consulte pour chaque enfant ses notes par matière, sa régularité de la semaine et son <strong>Bilan pédagogique</strong> (acquis vs lacunes à travailler).</li>
+                <li>Reçoit une notification avec le prénom de l’enfant à chaque quiz validé.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card mint">
+              <div class="card-title">✅ Dans le périmètre (IN)</div>
+              <ul>
+                <li>Authentification Google sécurisée + création/jonction de famille.</li>
+                <li>Espace Enfant épuré à 2 onglets : <strong>Cours</strong> et <strong>Quiz</strong>.</li>
+                <li>Dépôt de <strong>Cours</strong>, <strong>Exercices</strong> et <strong>Devoirs</strong> avec classement automatique par matière.</li>
+                <li>Évaluation des compétences acquises et lacunes + génération de <strong>Quiz adapté aux lacunes</strong>.</li>
+                <li>Quiz QCM + Exercices à trous + guidage socratique sans jamais révéler la réponse.</li>
+                <li>Gamification anti-farming (0 XP en rejouant un quiz déjà validé).</li>
+                <li>Tableau de bord Parent complet + notifications locales de validation de quiz.</li>
+              </ul>
+            </div>
+            <div class="card coral">
+              <div class="card-title">🚫 Hors périmètre (OUT — supprimé / volontairement exclu)</div>
+              <ul>
+                <li>Sections <em>Atelier</em>, <em>Tuteur IA libre</em> et <em>Chat Famille</em> (retirées sur demande produit pour garder un parcours enfant centré sur Cours &amp; Quiz).</li>
+                <li>Authentification anonyme Firebase (interdite par la politique sécurité).</li>
+                <li>Permissions larges de stockage externe (<code>READ_EXTERNAL_STORAGE</code> / <code>READ_MEDIA_IMAGES</code>).</li>
+                <li>Publicité, classements compétitifs entre élèves ou pénalités punitives.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 2. DOSSIER FONCTIONNEL -->
+        <!-- ======================================================= -->
+        <section class="doc-section" id="sec-fonctionnel">
+          <div class="section-header">
+            <div class="section-badge">2</div>
+            <div>
+              <h2>2. Dossier fonctionnel</h2>
+              <div class="section-sub">Spécifications détaillées des écrans, règles métier, pédagogie socratique et direction artistique</div>
+            </div>
+          </div>
+
+          <h3>2.1 Parcours d’accès et sécurité des profils</h3>
+          <ol>
+            <li><strong>Écran de connexion (<code>AuthScreen</code>)</strong> : présente le logo Quizzy (adapté au thème clair/sombre), une illustration accueillante et deux grandes cartes distinctes : <em>« Je suis un enfant »</em> et <em>« Je suis un parent »</em>, puis déclenche la connexion Google (Jetpack Credential Manager).</li>
+            <li><strong>Initialisation Famille (<code>FamilySetupScreen</code>)</strong> :
+              <ul>
+                <li><em>Mode Parent :</em> création du foyer (nom de famille, PIN parent à 4 chiffres, premier profil enfant avec prénom, niveau scolaire CP→3e, avatar et PIN enfant optionnel). Un code d’invitation unique à 6 caractères alphanumériques est généré.</li>
+                <li><em>Mode Enfant (appareil dédié) :</em> saisie du code d’invitation 6 caractères, prénom, niveau, avatar et PIN afin de rattacher le compte Google de l’enfant à la famille sans exposer les autres familles.</li>
+              </ul>
+            </li>
+            <li><strong>Portail de profils (<code>ProfilePortalScreen</code>)</strong> : permet de basculer entre les cartes enfants et la carte Parent. L’ouverture d’un espace protégé affiche un pavé numérique PIN personnalisé ; le parent saisit son PIN à 4 chiffres pour entrer dans le tableau de bord.</li>
+          </ol>
+
+          <h3>2.2 Espace Enfant — Navigation simplifiée (Cours &amp; Quiz)</h3>
+          <p>
+            L’espace enfant utilise une barre de navigation minimaliste à <strong>2 onglets uniquement</strong> (<code>Cours</code> et <code>Quiz</code>), garantissant une charge cognitive faible et une prise en main immédiate dès le CP.
+          </p>
+
+          <div class="grid-2">
+            <div class="card mint">
+              <div class="card-title">📚 Onglet 1 — Cours (Bibliothèque &amp; Dépôt)</div>
+              <ul>
+                <li>Salutation personnalisée (« Bonjour Lina ! ») + mascotte étoile encourageante + carte de niveau/XP.</li>
+                <li>Cartes matières illustrées avec anneau de progression (Français, Maths, Sciences, Histoire-Géo, Anglais, Autre).</li>
+                <li>Bouton principal <strong>« Ajouter un cours »</strong> ouvrant une fenêtre de dépôt <strong>entièrement scrollable</strong> (garantissant la visibilité permanente du bouton « Générer la synthèse et le quiz », même après ajout de photos ou documents).</li>
+                <li>Choix du type de document : <strong>Cours</strong>, <strong>Exercice</strong> ou <strong>Devoir</strong>.</li>
+                <li>Sélecteur de matière incluant <strong>« Classement auto »</strong> (détection automatique par l’IA et rangement dans le bon dossier matière).</li>
+                <li>Sources acceptées : appareil photo, galerie (Photo Picker sans permission), documents (PDF, DOCX, ODT, PPTX, TXT), dictée vocale ou saisie texte.</li>
+                <li>Filtres combinés par matière et par type (Tous / Cours / Exercice / Devoir).</li>
+              </ul>
+            </div>
+            <div class="card blue">
+              <div class="card-title">🧩 Onglet 2 — Quiz (Révisions &amp; Remédiation)</div>
+              <ul>
+                <li>Carte dédiée <strong>« Quiz adapté à tes lacunes »</strong> : affiche les notions fragiles identifiées à partir des exercices, devoirs et tentatives précédentes, avec un bouton d’action directe pour générer un quiz de remédiation ciblé.</li>
+                <li>Liste des quiz disponibles regroupés avec badges de difficulté (<em>Facile</em>, <em>Moyen</em>, <em>Défi</em>), nombre de questions et statut (<em>Nouveau — +XP</em> ou <em>Déjà validé — Entraînement 0 XP</em>).</li>
+                <li>Sélecteur de niveau scolaire permettant d’ajuster la classe de l’enfant à tout moment.</li>
+              </ul>
+            </div>
+          </div>
+
+          <h3>2.3 Synthèse de cours &amp; Évaluation des compétences (<code>LessonDetailScreen</code>)</h3>
+          <ul>
+            <li>En-tête coloré par matière affichant le titre, la date et la pastille de type (<code>Cours</code> / <code>Exercice</code> / <code>Devoir</code>).</li>
+            <li>4 blocs visuellement distincts et hiérarchisés : <strong>L’idée principale</strong>, <strong>À retenir</strong>, <strong>Les mots importants</strong> et <strong>Un exemple</strong>.</li>
+            <li><strong>Encart Évaluation des compétences</strong> (pour les exercices, devoirs et cours analysés) : présente la synthèse de l’évaluation, les <em>compétences acquises</em> (puces vertes) et les <em>notions à renforcer</em> (puces corail).</li>
+            <li>Enrichissement possible d’un cours existant par ajout de photos ou fichiers complémentaires.</li>
+            <li>Bouton d’action mis en valeur <strong>« Faire le quiz »</strong> + possibilité de générer une nouvelle série de questions.</li>
+          </ul>
+
+          <h3>2.4 Moteur de Quiz interactif &amp; Règles pédagogiques strictes</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Règle métier</th>
+                  <th>Comportement spécifié</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>RM-01 : Formats mixtes inspirés de la classe</strong></td>
+                  <td>Un quiz combine des questions <strong>QCM</strong> (grands boutons tactiles) et des <strong>Exercices à trous / saisie texte</strong> (<code>FILL_BLANK</code>, ex. phrase à compléter ou traduction <em>« Comment écrit-on canapé en anglais ? »</em>).</td>
+                </tr>
+                <tr>
+                  <td><strong>RM-02 : Tolérance de saisie</strong></td>
+                  <td>La correction d’un exercice à trous via <code>QuizAnswerEvaluator</code> ignore la casse, les espaces superflus, la ponctuation finale et les différences mineures d’accents, et accepte plusieurs réponses valides (<code>acceptedAnswers</code>).</td>
+                </tr>
+                <tr>
+                  <td><strong>RM-03 : Zéro-spoiler strict &amp; Guidage socratique</strong></td>
+                  <td>En cas de mauvaise réponse, Quizzy <strong>n’affiche jamais « Bravo »</strong> et <strong>ne révèle jamais la bonne réponse</strong> (ni même le nombre exact de réponses attendues s’il s’agit d’un comptage). Il affiche un message bienveillant et un indice progressif (<code>guidingHint</code> au 1er essai, <code>secondHint</code> au 2e essai) pour aider l’enfant à trouver lui-même. Un filtre de sécurité <code>safeGuidingHint()</code> bloque toute fuite éventuelle de la solution.</td>
+                </tr>
+                <tr>
+                  <td><strong>RM-04 : Validation ou passage sans blocage</strong></td>
+                  <td>L’enfant peut réessayer librement jusqu’à trouver la bonne réponse, ou choisir « Passer » sans culpabilisation (toujours sans spoiler la solution) ; la notion est alors enregistrée dans ses <code>weakSkills</code> pour une remédiation ultérieure.</td>
+                </tr>
+                <tr>
+                  <td><strong>RM-05 : Anti-farming XP sur replay</strong></td>
+                  <td>Un quiz terminé pour la <strong>1re fois</strong> attribue des points d’expérience (XP de base × multiplicateur de difficulté + bonus série + bonus sans faute). Si l’enfant refait un quiz déjà complété, le mode <em>« Entraînement — 0 XP »</em> est activé : <code>xpEarned = 0</code> afin que seuls les nouveaux quiz fassent gagner des XP.</td>
+                </tr>
+                <tr>
+                  <td><strong>RM-06 : Résultat constructif</strong></td>
+                  <td>L’écran de résultat met en avant les étoiles obtenues, le score, deux cartes distinctes <em>« Points maîtrisés »</em> et <em>« À retravailler »</em>, ainsi que les boutons <em>« Revoir la synthèse »</em> et <em>« Recommencer »</em>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>2.5 Espace Parent — Tableau de bord &amp; Notifications (<code>ParentDashboardScreen</code>)</h3>
+          <ul>
+            <li><strong>Sélecteur multi-enfants</strong> en haut du tableau de bord permettant d’afficher le récapitulatif individuel de chaque enfant du foyer (chaque parent connecté à la famille accède au récapitulatif synchronisé en temps réel).</li>
+            <li><strong>Progression par matière</strong> : moyenne des notes en pourcentage avec barres de progression colorées par matière.</li>
+            <li><strong>Réussites de la semaine</strong> : graphique hebdomadaire (Lun→Dim) des scores et objectifs atteints.</li>
+            <li><strong>Bilan pédagogique (<code>ParentSkillsRecapCard</code>)</strong> : regroupe clairement les <em>Lacunes &amp; notions à travailler</em> (issues des exercices/devoirs et des erreurs de quiz) et les <em>Compétences acquises</em> de l’enfant sélectionné.</li>
+            <li><strong>Notifications parentales</strong> : dès qu’un enfant valide un quiz, le parent reçoit une notification Android locale contenant explicitement le <strong>prénom de l’enfant</strong>, le titre du quiz et son score (ex. <em>« Lina a validé un quiz ! »</em>), complétée par un historique dans la cloche de notifications du tableau de bord.</li>
+            <li><strong>Gestion du foyer</strong> : ajout, modification et suppression de profils enfants (avec filtrage automatique des données orphelines) et copie rapide du code d’invitation familial.</li>
+          </ul>
+
+          <h3>2.6 Direction Artistique &amp; Identité Visuelle</h3>
+          <div class="swatch-row">
+            <div class="swatch"><div class="swatch-dot" style="background:#0E8F98"></div><div><strong>Turquoise doux</strong><br><code>#0E8F98</code> (Primaire)</div></div>
+            <div class="swatch"><div class="swatch-dot" style="background:#102247"></div><div><strong>Bleu profond</strong><br><code>#102247</code> (Titres/Nav)</div></div>
+            <div class="swatch"><div class="swatch-dot" style="background:#FBF8F1"></div><div><strong>Blanc cassé</strong><br><code>#FBF8F1</code> (Fond crème)</div></div>
+            <div class="swatch"><div class="swatch-dot" style="background:#FF7A59"></div><div><strong>Corail chaleureux</strong><br><code>#FF7A59</code> (Accent CTA)</div></div>
+            <div class="swatch"><div class="swatch-dot" style="background:#FFF4CE"></div><div><strong>Jaune clair</strong><br><code>#FFF4CE</code> (Encouragement)</div></div>
+          </div>
+          <ul>
+            <li><strong>Branding adaptatif</strong> : logo Quizzy transparent version claire sur fond crème et version sombre sur mode nuit (<code>QuizzyWordmarkLogo</code>), icône adaptative de lancement « Livre ouvert &amp; Étoile corail ».</li>
+            <li><strong>Loader animé signature</strong> : <code>QuizzyBookLoader</code> animant des pages d’un livre qui se tournent avec étincelles, dans la palette exacte de l’application.</li>
+            <li><strong>Typographie</strong> : police sans sérif ronde et lisible (Nunito / Inter), cartes arrondies (20–24 dp), ombres légères, espacements sur grille de 8 dp et support complet <code>enableEdgeToEdge()</code>.</li>
+          </ul>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 3. DOSSIER TECHNIQUE -->
+        <!-- ======================================================= -->
+        <section class="doc-section" id="sec-technique">
+          <div class="section-header">
+            <div class="section-badge navy">3</div>
+            <div>
+              <h2>3. Dossier technique</h2>
+              <div class="section-sub">Architecture Android MVVM, Firebase AI Logic, schéma Cloud Firestore et sécurité Zero-Trust</div>
+            </div>
+          </div>
+
+          <h3>3.1 Architecture globale</h3>
+          <div class="diagram-box">
+            <svg width="880" height="250" viewBox="0 0 880 250" fill="none" role="img" aria-label="Architecture technique Quizzy">
+              <!-- Layer 1 UI -->
+              <rect x="16" y="20" width="230" height="210" rx="18" fill="#E6F7F4" stroke="#0E8F98" stroke-width="2"/>
+              <text x="131" y="48" text-anchor="middle" font-weight="800" font-size="14" fill="#102247">Couche UI (Jetpack Compose)</text>
+              <rect x="34" y="64" width="194" height="32" rx="10" fill="#FFFFFF" stroke="#B7E4DF"/>
+              <text x="131" y="85" text-anchor="middle" font-size="12" font-weight="700" fill="#102247">Auth &amp; ProfilePortal (PIN)</text>
+              <rect x="34" y="106" width="194" height="32" rx="10" fill="#FFFFFF" stroke="#B7E4DF"/>
+              <text x="131" y="127" text-anchor="middle" font-size="12" font-weight="700" fill="#102247">ChildSpace (Cours • Quiz)</text>
+              <rect x="34" y="148" width="194" height="32" rx="10" fill="#FFFFFF" stroke="#B7E4DF"/>
+              <text x="131" y="169" text-anchor="middle" font-size="12" font-weight="700" fill="#102247">LessonDetail &amp; QuizPlayer</text>
+              <rect x="34" y="190" width="194" height="28" rx="10" fill="#FFFFFF" stroke="#B7E4DF"/>
+              <text x="131" y="208" text-anchor="middle" font-size="12" font-weight="700" fill="#102247">ParentDashboard &amp; Notifs</text>
+
+              <!-- Arrow 1 -->
+              <path d="M250 125H308" stroke="#102247" stroke-width="2.5" stroke-linecap="round"/>
+              <polygon points="308,119 320,125 308,131" fill="#102247"/>
+              <text x="284" y="114" text-anchor="middle" font-size="11" font-weight="700" fill="#5A6B88">StateFlow</text>
+
+              <!-- Layer 2 ViewModel & Domain -->
+              <rect x="322" y="20" width="236" height="210" rx="18" fill="#FFF4CE" stroke="#F5B82E" stroke-width="2"/>
+              <text x="440" y="48" text-anchor="middle" font-weight="800" font-size="14" fill="#102247">State &amp; Logique Métier</text>
+              <rect x="340" y="64" width="200" height="38" rx="10" fill="#FFFFFF" stroke="#F0D384"/>
+              <text x="440" y="88" text-anchor="middle" font-size="12" font-weight="700" fill="#102247">EduFamilleViewModel</text>
+              <rect x="340" y="112" width="200" height="48" rx="10" fill="#FFFFFF" stroke="#F0D384"/>
+              <text x="440" y="133" text-anchor="middle" font-size="11.5" font-weight="700" fill="#102247">Gamification • SkillTracker</text>
+              <text x="440" y="150" text-anchor="middle" font-size="11" fill="#5A6B88">AnswerEvaluator • SafeHint</text>
+              <rect x="340" y="170" width="200" height="44" rx="10" fill="#FFFFFF" stroke="#F0D384"/>
+              <text x="440" y="190" text-anchor="middle" font-size="11.5" font-weight="700" fill="#102247">FamilyRepository &amp; Auth</text>
+              <text x="440" y="205" text-anchor="middle" font-size="11" fill="#5A6B88">GeminiTutorService</text>
+
+              <!-- Arrow 2 -->
+              <path d="M562 125H620" stroke="#102247" stroke-width="2.5" stroke-linecap="round"/>
+              <polygon points="620,119 632,125 620,131" fill="#102247"/>
+              <text x="592" y="114" text-anchor="middle" font-size="11" font-weight="700" fill="#5A6B88">TLS / SDK</text>
+
+              <!-- Layer 3 Cloud Firebase -->
+              <rect x="634" y="20" width="230" height="210" rx="18" fill="#EAF2FF" stroke="#2A5BD7" stroke-width="2"/>
+              <text x="749" y="48" text-anchor="middle" font-weight="800" font-size="14" fill="#102247">Backend Firebase Cloud</text>
+              <rect x="652" y="64" width="194" height="34" rx="10" fill="#FFFFFF" stroke="#BFD5FA"/>
+              <text x="749" y="85" text-anchor="middle" font-size="12" font-weight="700" fill="#102247">Firebase Auth + Credential Mgr</text>
+              <rect x="652" y="108" width="194" height="34" rx="10" fill="#FFFFFF" stroke="#BFD5FA"/>
+              <text x="749" y="129" text-anchor="middle" font-size="12" font-weight="700" fill="#102247">Cloud Firestore (Zero-Trust)</text>
+              <rect x="652" y="152" width="194" height="34" rx="10" fill="#FFFFFF" stroke="#BFD5FA"/>
+              <text x="749" y="173" text-anchor="middle" font-size="12" font-weight="700" fill="#102247">Firebase AI Logic (Gemini)</text>
+              <rect x="652" y="194" width="194" height="26" rx="10" fill="#FFF0EB" stroke="#FF7A59"/>
+              <text x="749" y="211" text-anchor="middle" font-size="11.5" font-weight="800" fill="#A93419">Firebase App Check (Integrity)</text>
+            </svg>
+          </div>
+
+          <h3>3.2 Stack technologique &amp; dépendances exactes</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Couche</th>
+                  <th>Technologie / Bibliothèque</th>
+                  <th>Version</th>
+                  <th>Rôle dans Quizzy</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Langage &amp; Build</td><td>Kotlin / AGP / Gradle Kotlin DSL</td><td><code>2.4.21</code> / <code>9.1.1</code></td><td>Code source 100 % Kotlin, Java 11, compilation incrémentale.</td></tr>
+                <tr><td>UI &amp; Design</td><td>Jetpack Compose BOM + Material 3 + Icons Extended</td><td><code>2024.09.00</code></td><td>Interfaces déclaratives M3, Edge-to-Edge, thèmes clair/sombre.</td></tr>
+                <tr><td>Cycle de vie</td><td>Lifecycle ViewModel Compose / Activity Compose</td><td><code>2.8.7</code> / <code>1.10.1</code></td><td><code>StateFlow</code> + <code>collectAsStateWithLifecycle</code>, BackHandler.</td></tr>
+                <tr><td>Navigation &amp; Images</td><td>Navigation Compose / Coil Compose</td><td><code>2.8.9</code> / <code>2.7.0</code></td><td>Routage multi-écrans et chargement optimisé d’images locales.</td></tr>
+                <tr><td>Backend &amp; IA</td><td>Firebase BOM (<code>firebase-ai</code>, <code>firestore</code>, <code>auth</code>, <code>appcheck</code>)</td><td><code>35.1.0</code></td><td>Persistance temps réel, IA multimodale Gemini sans clé API exposée, App Check.</td></tr>
+                <tr><td>Authentification</td><td>Jetpack <code>androidx.credentials</code> + <code>googleid</code></td><td><code>1.5.0</code> / <code>1.1.1</code></td><td>Google Sign-In natif sécurisé (<code>GetSignInWithGoogleOption</code>).</td></tr>
+                <tr><td>Asynchronisme</td><td>Kotlinx Coroutines</td><td><code>1.10.2</code></td><td>Appels réseau/IA non bloquants, listeners temps réel Firestore.</td></tr>
+                <tr><td>Qualité &amp; Tests</td><td>JUnit4 / Robolectric / Compose UI Test / Firebase Emulator</td><td><code>4.13.2</code> / <code>4.16.1</code></td><td>Tests unitaires JVM, tests UI Compose sans émulateur, validation règles Firestore.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>3.3 Pipeline IA Multimodale (Firebase AI Logic — Gemini)</h3>
+          <p>
+            <code>GeminiTutorService</code> exploite <strong>Firebase AI Logic</strong> (<code>Firebase.ai</code>) protégé par <strong>Firebase App Check</strong> — aucune clé API Gemini n’est embarquée dans l’APK. Le service traite :
+          </p>
+          <ul>
+            <li><strong>Images</strong> (photos de cahiers/manuels via caméra ou Photo Picker, redimensionnées avant envoi).</li>
+            <li><strong>Documents bureautiques</strong> (extraction texte/XML locale pour <code>.docx</code>, <code>.odt</code>, <code>.pptx</code>, <code>.txt</code> et transmission binaire <code>application/pdf</code>).</li>
+            <li><strong>Notes dictées ou saisies</strong> par l’enfant.</li>
+          </ul>
+          <p>
+            Les réponses sont structurées en JSON strict (nettoyé par <code>stripJsonFences()</code> et validé côté client avant écriture Firestore) contenant : <code>detectedSubject</code>, <code>title</code>, <code>mainIdea</code>, <code>keyPoints</code>, <code>importantWords</code>, <code>example</code>, <code>acquiredSkills</code>, <code>weakPoints</code>, <code>evaluationSummary</code> et un tableau de questions mixtes (<code>MCQ</code> + <code>FILL_BLANK</code>) avec <code>guidingHint</code> et <code>secondHint</code> garantis sans spoiler.
+          </p>
+
+          <h3>3.4 Modèle de données Cloud Firestore</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Chemin Collection</th>
+                  <th>Champs principaux</th>
+                  <th>Règles d’intégrité</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>users/{uid}</code></td>
+                  <td><code>uid</code>, <code>email</code>, <code>displayName</code>, <code>familyId</code>, <code>role</code> (<code>parent</code>/<code>child</code>), <code>linkedChildId</code></td>
+                  <td>Lecture/écriture strictement réservée au propriétaire authentifié (<code>uid == request.auth.uid</code>).</td>
+                </tr>
+                <tr>
+                  <td><code>invite_codes/{code}</code></td>
+                  <td><code>code</code> (<code>^[A-Z0-9]{6}$</code>), <code>familyId</code>, <code>familyName</code>, <code>createdByUid</code></td>
+                  <td><code>get</code> autorisé pour rejoindre une famille, <strong><code>list</code> interdit</strong> (anti-énumération).</td>
+                </tr>
+                <tr>
+                  <td><code>families/{familyId}</code></td>
+                  <td><code>name</code>, <code>parentUid</code>, <code>parentPinHash</code> (SHA-256 64 car.), <code>inviteCode</code>, <code>memberUids</code> (≤ 12)</td>
+                  <td>Seuls les membres dans <code>memberUids</code> lisent ; seul un membre avec code valide peut s’ajouter.</td>
+                </tr>
+                <tr>
+                  <td><code>families/{fid}/children/{cid}</code></td>
+                  <td><code>name</code>, <code>gradeLevel</code>, <code>age</code> (5..18), <code>avatarKey</code>, <code>pinHash</code>, <code>xp</code>, <code>stars</code>, <code>bestStreak</code>, <code>badges</code>, <code>acquiredSkills</code>, <code>weakPoints</code>, <code>completedQuizIds</code></td>
+                  <td>Validation stricte des bornes et liste fermée de champs (<code>hasOnly</code>).</td>
+                </tr>
+                <tr>
+                  <td><code>families/{fid}/lessons/{lid}</code></td>
+                  <td><code>childId</code>, <code>subject</code>, <code>documentType</code> (<code>Cours</code>/<code>Exercice</code>/<code>Devoir</code>), <code>title</code>, <code>mainIdea</code>, <code>keyPoints</code>, <code>importantWords</code>, <code>example</code>, <code>acquiredSkills</code>, <code>weakPoints</code>, <code>evaluationSummary</code>, <code>attachedFiles</code></td>
+                  <td>Champs non vides vérifiés avant persistance ; enrichissement documentaire autorisé aux membres.</td>
+                </tr>
+                <tr>
+                  <td><code>families/{fid}/quizzes/{qid}</code></td>
+                  <td><code>childId</code>, <code>lessonId</code>, <code>subject</code>, <code>title</code>, <code>difficulty</code> (<code>Facile</code>/<code>Moyen</code>/<code>Défi</code>), <code>targetedGaps</code>, <code>questions[]</code> (<code>type</code>, <code>prompt</code>, <code>options</code>, <code>correctIndex</code>, <code>acceptedAnswers</code>, <code>sentenceTemplate</code>, <code>guidingHint</code>, <code>secondHint</code>, <code>skillTag</code>)</td>
+                  <td>Contrôle du schéma de chaque question et de la difficulté autorisée.</td>
+                </tr>
+                <tr>
+                  <td><code>families/{fid}/quiz_attempts/{aid}</code></td>
+                  <td><code>childId</code>, <code>quizId</code>, <code>subject</code>, <code>score</code> (≤ <code>totalQuestions</code>), <code>totalQuestions</code>, <code>xpEarned</code>, <code>maxStreak</code>, <code>masteredSkills</code>, <code>weakSkills</code>, <code>createdAt</code> (≤ <code>request.time</code>)</td>
+                  <td><strong>Immuable</strong> (<code>allow update: if false</code>) pour garantir la fiabilité du suivi parental.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>3.5 Sécurité Zero-Trust &amp; Conformité Google Play</h3>
+          <ul>
+            <li><strong>Filet de sécurité global</strong> : <code>match /{document=**} { allow read, write: if false; }</code> en fin de <code>firestore.rules</code>.</li>
+            <li><strong>Hachage des PINs</strong> : aucun code PIN en clair en base ; hachage SHA-256 côté client (<code>PinHasher</code>) vérifié par expression régulière 64 hex dans Firestore.</li>
+            <li><strong>Permissions Android moindres privilèges</strong> : <code>INTERNET</code>, <code>CAMERA</code> (optionnelle, demandée au runtime), <code>RECORD_AUDIO</code> (optionnelle pour la dictée), <code>POST_NOTIFICATIONS</code> (Android 13+ pour les notifications parentales). La sélection d’images utilise exclusivement le <strong>Photo Picker Android zéro-permission</strong> (<code>PickVisualMedia</code>).</li>
+          </ul>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 4. DEV -->
+        <!-- ======================================================= -->
+        <section class="doc-section" id="sec-dev">
+          <div class="section-header">
+            <div class="section-badge coral">4</div>
+            <div>
+              <h2>4. DEV — Dossier de développement</h2>
+              <div class="section-sub">Structure du code source, solutions d’ingénierie clés, catalogue des testTags et commandes build</div>
+            </div>
+          </div>
+
+          <h3>4.1 Arborescence du projet Android</h3>
+          <div class="code-box">
+            <div class="code-head"><span>Structure réelle du dépôt Quizzy</span><button class="copy-btn" onclick="copyCode(this)">Copier</button></div>
+            <pre><code>app/src/main/java/com/example/
+├── MainActivity.kt                      # Point d'entrée Edge-to-Edge, AppCheck, navigation racine
+├── data/
+│   ├── AuthManager.kt                   # Google Sign-In via CredentialManager + FirebaseAuth
+│   ├── FamilyRepository.kt              # CRUD Firestore, listeners temps réel, transaction anti-farming XP
+│   ├── FrenchErrorMessages.kt           # Traduction complète en français des erreurs SDK/réseau
+│   ├── GeminiTutorService.kt            # Firebase AI Logic multimodal, prompts socratiques, extraction DOCX/ODT/PPTX
+│   └── VoiceRecorder.kt                 # Enregistrement / dictée vocale de cours
+├── firebase/
+│   ├── AppCheckInit.kt                  # Initialisation App Check (Debug / Play Integrity / reCAPTCHA)
+│   └── FirestoreErrorHandler.kt         # Diagnostic structuré des erreurs Firestore
+├── model/
+│   └── Models.kt                        # Data classes, Gamification, PinHasher, SkillTrackerHelper, QuizAnswerEvaluator, QuizFeedbackHelper
+├── notifications/
+│   └── QuizNotificationHelper.kt        # Canal &amp; notifications Android avec prénom de l'enfant
+└── ui/
+    ├── components/
+    │   ├── CommonComponents.kt          # Pavé PIN, cartes XP/Niveaux, badges, sélecteur classe
+    │   ├── QuizzyBrandingAndLoader.kt   # Logo adaptatif clair/sombre + loader livre animé
+    │   └── QuizzyIllustrations.kt       # Mascotte étoile, cartes matières pastel, graphique hebdo parent
+    ├── screens/
+    │   ├── AuthScreen.kt                # Connexion Enfant / Parent
+    │   ├── FamilySetupScreen.kt         # Création famille &amp; jonction par code
+    │   ├── ProfilePortalScreen.kt       # Sélection profil &amp; contrôle PIN
+    │   ├── ChildSpaceScreen.kt          # Espace Enfant 2 onglets (Cours / Quiz) + Popup dépôt scrollable
+    │   ├── LessonDetailScreen.kt        # Synthèse 4 blocs + Évaluation compétences + Enrichissement
+    │   ├── QuizPlayerScreen.kt          # Quiz QCM + Texte à trous + Guidage socratique + Résultat
+    │   └── ParentDashboardScreen.kt     # Suivi notes, graphique hebdo, Bilan pédagogique, notifications
+    ├── theme/
+    │   ├── Color.kt / Theme.kt / Type.kt
+    └── viewmodel/
+        └── EduFamilleViewModel.kt       # État unifié StateFlow, orchestration IA &amp; Firestore
+
+firestore.rules                          # Règles Zero-Trust déployées sur la base nommée
+firestore.test.js                        # 8 tests automatisés des règles de sécurité (Emulator)
+app/src/test/java/com/example/           # 45 tests JVM + Robolectric Compose UI</code></pre>
+          </div>
+
+          <h3>4.2 Solutions d’ingénierie clés implémentées</h3>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-title">📜 Popup de dépôt scrollable garantie</div>
+              <p>Dans <code>ChildSpaceScreen.kt</code>, la fenêtre de dépôt utilise un overlay plein-écran dans la fenêtre (<code>DialogProperties(usePlatformDefaultWidth = false)</code> / conteneur dédié) avec une <code>Column</code> dotée de <code>verticalScroll(rememberScrollState())</code> et <code>imePadding()</code>, identifiée par <code>deposit_dialog_scroll_container</code>. Même après ajout de plusieurs photos ou PDF, l’enfant peut défiler jusqu’au bouton <code>submit_deposit_button</code>.</p>
+            </div>
+            <div class="card">
+              <div class="card-title">🧠 Garde-fou Socratique anti-spoiler</div>
+              <p><code>QuizFeedbackHelper.safeGuidingHint()</code> vérifie dynamiquement que l’indice généré par l’IA ne contient ni la bonne réponse, ni l’une des <code>acceptedAnswers</code>, ni une formule de félicitation inappropriée (<code>sanitizeNeutralExplanation()</code>). En cas de fuite détectée, un indice méthodologique neutre est substitué automatiquement.</p>
+            </div>
+            <div class="card">
+              <div class="card-title">✍️ Évaluateur tolérant d’exercices à trous</div>
+              <p><code>QuizAnswerEvaluator.isFillBlankCorrect()</code> normalise en Unicode NFD (suppression des diacritiques), passe en minuscules, supprime la ponctuation superflue et compare l’entrée de l’élève contre la réponse attendue et ses variantes acceptées (ex. <code>"sofa"</code>, <code>"couch"</code>).</p>
+            </div>
+            <div class="card">
+              <div class="card-title">🛡️ Anti-farming XP &amp; Progression compétences</div>
+              <p>Lors de la soumission d’une tentative, <code>FamilyRepository</code> vérifie si <code>quizId</code> appartient déjà à <code>child.completedQuizIds</code>. Si oui, <code>xpEarned</code> est forcé à <code>0</code>. En parallèle, <code>SkillTrackerHelper</code> fait évoluer <code>acquiredSkills</code> et <code>weakPoints</code> (graduation automatique d’une lacune lorsqu’elle est maîtrisée).</p>
+            </div>
+          </div>
+
+          <h3>4.3 Catalogue des identifiants UI (<code>Modifier.testTag</code>)</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Écran</th>
+                  <th>testTags principaux</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Connexion &amp; Setup</td>
+                  <td><code>auth_role_child</code>, <code>auth_role_parent</code>, <code>google_sign_in_button</code>, <code>role_parent_card</code>, <code>role_child_card</code>, <code>family_name_input</code>, <code>parent_pin_input</code>, <code>create_family_button</code>, <code>invite_code_input</code>, <code>join_family_button</code></td>
+                </tr>
+                <tr>
+                  <td>Portail &amp; PIN</td>
+                  <td><code>portal_child_card_{id}</code>, <code>portal_parent_admin_card</code>, <code>pin_key_0..9</code>, <code>pin_close_button</code>, <code>portal_sign_out_button</code></td>
+                </tr>
+                <tr>
+                  <td>Espace Enfant (Cours &amp; Quiz)</td>
+                  <td><code>deposit_dialog_scroll_container</code>, <code>doctype_chip_Cours|Exercice|Devoir</code>, <code>subject_chip_Auto</code>, <code>subject_chip_{matière}</code>, <code>take_photo_button</code>, <code>pick_photo_button</code>, <code>pick_document_button</code>, <code>deposit_notes_input</code>, <code>submit_deposit_button</code>, <code>child_gap_quiz_card</code>, <code>generate_gap_quiz_button</code>, <code>child_lesson_card_{id}</code>, <code>child_quiz_card_{id}</code></td>
+                </tr>
+                <tr>
+                  <td>Synthèse &amp; Quiz</td>
+                  <td><code>lesson_detail_doctype_pill</code>, <code>lesson_skills_evaluation_card</code>, <code>lesson_primary_quiz_cta</code>, <code>quiz_question_type_chip</code>, <code>quiz_replay_mode_pill</code>, <code>quiz_fill_blank_input</code>, <code>quiz_option_{idx}</code>, <code>quiz_feedback_banner</code>, <code>quiz_guiding_hint_card</code>, <code>quiz_validate_button</code>, <code>quiz_skip_button</code>, <code>quiz_next_button</code></td>
+                </tr>
+                <tr>
+                  <td>Espace Parent</td>
+                  <td><code>parent_child_selector_pill</code>, <code>parent_subject_progress_card</code>, <code>parent_weekly_chart_card</code>, <code>parent_skills_recap_card</code>, <code>parent_weak_points_section</code>, <code>parent_acquired_skills_section</code>, <code>parent_notifications_button</code>, <code>parent_notifications_dialog</code>, <code>add_child_fab</code>, <code>copy_invite_code_button</code></td>
+                </tr>
+                <tr>
+                  <td>Branding &amp; Loader</td>
+                  <td><code>quizzy_wordmark_logo</code>, <code>quizzy_book_loader</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>4.4 Commandes de build, tests et déploiement</h3>
+          <div class="code-box">
+            <div class="code-head"><span>Commandes de développement (Bash / Gradle / Firebase)</span><button class="copy-btn" onclick="copyCode(this)">Copier</button></div>
+            <pre><code># 1. Compiler l'APK Debug Android
+gradle :app:assembleDebug
+
+# 2. Exécuter l'ensemble des tests unitaires JVM + Compose Robolectric (45 tests)
+gradle :app:testDebugUnitTest --rerun-tasks
+
+# 3. Exécuter la suite de tests des règles de sécurité Firestore sur émulateur local (8 tests)
+firebase emulators:exec --only firestore "node --test firestore.test.js"
+
+# 4. Déployer les règles Firestore validées
+firebase deploy --only firestore:rules</code></pre>
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 5. PLAN DE TESTS -->
+        <!-- ======================================================= -->
+        <section class="doc-section" id="sec-plan-tests">
+          <div class="section-header">
+            <div class="section-badge">5</div>
+            <div>
+              <h2>5. Plan de tests</h2>
+              <div class="section-sub">Stratégie qualité, pyramide de tests, environnements, gestion des risques et traçabilité</div>
+            </div>
+          </div>
+
+          <h3>5.1 Pyramide et stratégie de tests</h3>
+          <div class="grid-4">
+            <div class="card mint">
+              <div class="card-title">🧪 Niveau 1 — Unitaires JVM</div>
+              Gamification, règle 0 XP, évaluation texte à trous, filtre socratique anti-spoiler, hachage PIN, parsing JSON Gemini, extraction DOCX/ODT/PPTX, messages d’erreur FR.
+            </div>
+            <div class="card blue">
+              <div class="card-title">📱 Niveau 2 — UI Compose (Robolectric)</div>
+              Parcours critiques bout-en-bout (CUJ) sur tous les écrans Jetpack Compose sans dépendance émulateur physique, en mode clair et sombre.
+            </div>
+            <div class="card coral">
+              <div class="card-title">🔒 Niveau 3 — Sécurité Firestore</div>
+              Tests de règles Zero-Trust exécutés contre l’émulateur Firebase Firestore (isolation inter-familles, validation des types, immuabilité des tentatives).
+            </div>
+            <div class="card yellow">
+              <div class="card-title">🎭 Niveau 4 — E2E &amp; Recette (Playwright / Manuel)</div>
+              Validation de l’interface web/prévisualisation streaming via Playwright TypeScript + campagne de 26 cas de tests manuels avant mise en production.
+            </div>
+          </div>
+
+          <h3>5.2 Environnements, critères d’entrée et de sortie</h3>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-title">🌍 Environnements de test</div>
+              <ul>
+                <li><strong>Local JVM / CI :</strong> Gradle + Robolectric (API 34/36) + Node.js Test Runner + Firebase Emulator (`127.0.0.1:8085`).</li>
+                <li><strong>Prévisualisation Streaming (Dev) :</strong><br><code>https://ais-dev-hxidfi6wu5ebg2pbzm5ski-678533456299.europe-west3.run.app</code></li>
+                <li><strong>Pré-production partagée :</strong><br><code>https://ais-pre-hxidfi6wu5ebg2pbzm5ski-678533456299.europe-west3.run.app</code></li>
+              </ul>
+            </div>
+            <div class="card">
+              <div class="card-title">✅ Critères de sortie (Go / No-Go)</div>
+              <ul>
+                <li>Compilation Android Debug &amp; Release sans erreur ni warning critique.</li>
+                <li><strong>100 %</strong> des tests unitaires, Robolectric UI et Règles Firestore au vert.</li>
+                <li><strong>0 anomalie bloquante (P0)</strong> ou majeure (P1) ouverte sur la sécurité, le zéro-spoiler ou l’anti-farming XP.</li>
+                <li>Déploiement réussi des règles <code>firestore.rules</code> synchronisées avec le schéma applicatif.</li>
+              </ul>
+            </div>
+          </div>
+
+          <h3>5.3 Matrice des risques &amp; mitigation</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Risque identifié</th>
+                  <th>Impact</th>
+                  <th>Mesure de mitigation vérifiée par test</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Fuite de la bonne réponse par l’IA lors d’une erreur</td><td><span class="pill pill-p0">Critique</span></td><td>Double verrou : prompt socratique strict + filtre déterministe <code>safeGuidingHint()</code> testé unitairement et en UI.</td></tr>
+                <tr><td>Accès d’un tiers aux données d’un enfant</td><td><span class="pill pill-p0">Critique</span></td><td>Règles Firestore Zero-Trust vérifiées par 8 tests automatisés (refus anonyme, refus étranger, anti-énumération).</td></tr>
+                <tr><td>Bouton de soumission masqué sur petit écran dans la popup dépôt</td><td><span class="pill pill-p1">Élevé</span></td><td>Conteneur dédié scrollable <code>deposit_dialog_scroll_container</code> vérifié en test UI après ajout de pièces jointes.</td></tr>
+                <tr><td>Farming infini de points XP en refaisant le même quiz</td><td><span class="pill pill-p1">Élevé</span></td><td>Contrôle sur <code>completedQuizIds</code> côté UI et repository : 0 XP garanti sur toute répétition.</td></tr>
+                <tr><td>Affichage d’erreurs techniques en anglais aux enfants</td><td><span class="pill pill-p2">Moyen</span></td><td>Normalisation exhaustive via <code>FrenchErrorMessages</code> (7 tests unitaires dédiés).</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 6. CAS DE TESTS MANUELS -->
+        <!-- ======================================================= -->
+        <section class="doc-section" id="sec-tests-manuels">
+          <div class="section-header">
+            <div class="section-badge">6</div>
+            <div>
+              <h2>6. Cas de tests manuels</h2>
+              <div class="section-sub">Cahier de recette complet (26 scénarios) filtrable par module et priorité</div>
+            </div>
+          </div>
+
+          <div class="toolbar no-print">
+            <input class="input" type="search" id="tcSearch" placeholder="🔍 Filtrer par ID, scénario, mot-clé (ex: PIN, spoiler, XP, lacunes)..." />
+            <select class="select" id="tcModule">
+              <option value="ALL">Tous les modules</option>
+              <option value="Auth &amp; Sécurité">Auth &amp; Sécurité</option>
+              <option value="Espace Enfant - Cours">Espace Enfant - Cours</option>
+              <option value="Quiz &amp; Pédagogie">Quiz &amp; Pédagogie</option>
+              <option value="Espace Parent">Espace Parent</option>
+              <option value="UI &amp; DA">UI &amp; DA</option>
+            </select>
+            <select class="select" id="tcPriority">
+              <option value="ALL">Toutes priorités</option>
+              <option value="P0">P0 - Critique</option>
+              <option value="P1">P1 - Majeur</option>
+              <option value="P2">P2 - Standard</option>
+            </select>
+            <span id="tcCount" class="pill pill-info">26 cas affichés</span>
+          </div>
+
+          <div class="table-wrap">
+            <table id="tcTable">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Module</th>
+                  <th>Priorité</th>
+                  <th>Scénario &amp; Étapes clés</th>
+                  <th>Résultat attendu</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr data-mod="Auth &amp; Sécurité" data-prio="P0"><td><strong>TC-01</strong></td><td>Auth &amp; Sécurité</td><td><span class="pill pill-p0">P0</span></td><td>Ouvrir l’app déconnecté, choisir <em>« Je suis un parent »</em>, se connecter via Google Sign-In.</td><td>L’authentification Credential Manager réussit et redirige vers <code>FamilySetupScreen</code> (si nouveau) ou <code>ProfilePortalScreen</code>.</td></tr>
+                <tr data-mod="Auth &amp; Sécurité" data-prio="P0"><td><strong>TC-02</strong></td><td>Auth &amp; Sécurité</td><td><span class="pill pill-p0">P0</span></td><td>Créer une famille avec nom, PIN parent (4 chiffres) et un premier enfant (prénom, classe CM1, avatar).</td><td>Famille créée dans Firestore, PIN stocké en SHA-256, code d’invitation 6 caractères généré.</td></tr>
+                <tr data-mod="Auth &amp; Sécurité" data-prio="P0"><td><strong>TC-03</strong></td><td>Auth &amp; Sécurité</td><td><span class="pill pill-p0">P0</span></td><td>Sur un second appareil, se connecter avec un compte Google enfant et saisir un code d’invitation invalide puis valide.</td><td>Message d’erreur français clair sur code invalide ; jonction familiale réussie sur code valide sans lister les autres familles.</td></tr>
+                <tr data-mod="Auth &amp; Sécurité" data-prio="P0"><td><strong>TC-04</strong></td><td>Auth &amp; Sécurité</td><td><span class="pill pill-p0">P0</span></td><td>Depuis le portail, toucher la carte Parent, saisir un faux PIN puis le bon PIN.</td><td>Refus avec message clair sur faux PIN ; accès au tableau de bord parent sur PIN exact.</td></tr>
+                <tr data-mod="Auth &amp; Sécurité" data-prio="P0"><td><strong>TC-05</strong></td><td>Auth &amp; Sécurité</td><td><span class="pill pill-p0">P0</span></td><td>Vérifier qu’un utilisateur d’une famille B tente de lire les cours/tentatives d’une famille A (via API/règles).</td><td>Accès strictement refusé par Firestore (<code>PERMISSION_DENIED</code>).</td></tr>
+
+                <tr data-mod="Espace Enfant - Cours" data-prio="P0"><td><strong>TC-06</strong></td><td>Espace Enfant - Cours</td><td><span class="pill pill-p0">P0</span></td><td>Ouvrir le profil de Lina et inspecter la barre de navigation basse.</td><td>Seuls <strong>2 onglets</strong> sont visibles : <strong>Cours</strong> et <strong>Quiz</strong>. Aucune trace d’Atelier, Tuteur ou Chat Famille.</td></tr>
+                <tr data-mod="Espace Enfant - Cours" data-prio="P0"><td><strong>TC-07</strong></td><td>Espace Enfant - Cours</td><td><span class="pill pill-p0">P0</span></td><td>Cliquer sur <em>« Ajouter un cours »</em>, joindre 2 photos + 1 PDF et saisir des notes, puis scroller vers le bas sur petit écran.</td><td>La popup scrolle fluidement (<code>deposit_dialog_scroll_container</code>) et le bouton <em>« Générer la synthèse et le quiz »</em> reste accessible et cliquable.</td></tr>
+                <tr data-mod="Espace Enfant - Cours" data-prio="P0"><td><strong>TC-08</strong></td><td>Espace Enfant - Cours</td><td><span class="pill pill-p0">P0</span></td><td>Déposer un cours de fractions en laissant la matière sur <em>« Classement auto »</em>.</td><td>L’IA détecte automatiquement <strong>Maths</strong> et range le cours dans le dossier Maths.</td></tr>
+                <tr data-mod="Espace Enfant - Cours" data-prio="P0"><td><strong>TC-09</strong></td><td>Espace Enfant - Cours</td><td><span class="pill pill-p0">P0</span></td><td>Déposer un document en sélectionnant le type <strong>Exercice</strong> puis un autre en type <strong>Devoir</strong>.</td><td>Les documents affichent leur badge de type, sont filtrables (Tous/Cours/Exercice/Devoir) et évaluent compétences acquises + lacunes.</td></tr>
+                <tr data-mod="Espace Enfant - Cours" data-prio="P1"><td><strong>TC-10</strong></td><td>Espace Enfant - Cours</td><td><span class="pill pill-p1">P1</span></td><td>Importer un document <code>.docx</code> ou <code>.pdf</code> via le sélecteur système (sans permission stockage large).</td><td>Le texte/contenu est extrait proprement, la synthèse et le quiz sont générés sans crash.</td></tr>
+                <tr data-mod="Espace Enfant - Cours" data-prio="P1"><td><strong>TC-11</strong></td><td>Espace Enfant - Cours</td><td><span class="pill pill-p1">P1</span></td><td>Ouvrir la fiche d’un cours et vérifier sa structure visuelle.</td><td>Les 4 blocs distincts (Idée principale, À retenir, Mots importants, Un exemple), l’encart Compétences et le CTA <em>« Faire le quiz »</em> sont clairement affichés.</td></tr>
+                <tr data-mod="Espace Enfant - Cours" data-prio="P2"><td><strong>TC-12</strong></td><td>Espace Enfant - Cours</td><td><span class="pill pill-p2">P2</span></td><td>Enrichir un cours existant en ajoutant une photo supplémentaire depuis <code>LessonDetailScreen</code>.</td><td>La synthèse est enrichie sans perte des informations initiales ni erreur Firestore.</td></tr>
+
+                <tr data-mod="Quiz &amp; Pédagogie" data-prio="P0"><td><strong>TC-13</strong></td><td>Quiz &amp; Pédagogie</td><td><span class="pill pill-p0">P0</span></td><td>Lancer un quiz QCM et sélectionner volontairement une mauvaise réponse.</td><td><strong>Aucun « Bravo »</strong>, la bonne réponse <strong>n’est pas dévoilée</strong>, un message bienveillant et un 1er indice d’orientation s’affichent ; l’enfant peut réessayer.</td></tr>
+                <tr data-mod="Quiz &amp; Pédagogie" data-prio="P0"><td><strong>TC-14</strong></td><td>Quiz &amp; Pédagogie</td><td><span class="pill pill-p0">P0</span></td><td>Sur la même question, faire une 2e erreur consécutive.</td><td>Un 2e indice plus précis (<code>secondHint</code>) s’affiche, toujours sans donner la réponse ni révéler un nombre exact à deviner.</td></tr>
+                <tr data-mod="Quiz &amp; Pédagogie" data-prio="P0"><td><strong>TC-15</strong></td><td>Quiz &amp; Pédagogie</td><td><span class="pill pill-p0">P0</span></td><td>Sur une question de type <strong>Exercice à trous</strong> (ex. traduction <em>canapé</em> → <em>sofa</em>), taper <code>"table"</code> puis <code>"  SOFA! "</code>.</td><td>1er essai : guidage bienveillant sans spoiler. 2e essai : réponse acceptée grâce à la normalisation casse/espaces/ponctuation.</td></tr>
+                <tr data-mod="Quiz &amp; Pédagogie" data-prio="P1"><td><strong>TC-16</strong></td><td>Quiz &amp; Pédagogie</td><td><span class="pill pill-p1">P1</span></td><td>Cliquer sur <em>« Passer cette question »</em> après une erreur.</td><td>Passage sans blocage ni culpabilisation, sans dévoiler la réponse, et ajout de la notion aux lacunes de la tentative.</td></tr>
+                <tr data-mod="Quiz &amp; Pédagogie" data-prio="P0"><td><strong>TC-17</strong></td><td>Quiz &amp; Pédagogie</td><td><span class="pill pill-p0">P0</span></td><td>Terminer un nouveau quiz pour la 1re fois et noter les XP gagnés.</td><td>Les XP sont crédités, les étoiles et badges éventuels sont débloqués, la carte Points maîtrisés / À revoir s’affiche.</td></tr>
+                <tr data-mod="Quiz &amp; Pédagogie" data-prio="P0"><td><strong>TC-18</strong></td><td>Quiz &amp; Pédagogie</td><td><span class="pill pill-p0">P0</span></td><td>Cliquer sur <em>« Recommencer »</em> ou relancer ce même quiz déjà validé.</td><td>Badge <em>« Entraînement • 0 XP »</em> visible ; en fin de quiz, <code>xpEarned == 0</code> et le total XP de l’enfant reste inchangé.</td></tr>
+                <tr data-mod="Quiz &amp; Pédagogie" data-prio="P0"><td><strong>TC-19</strong></td><td>Quiz &amp; Pédagogie</td><td><span class="pill pill-p0">P0</span></td><td>Aller dans l’onglet <strong>Quiz</strong> avec des lacunes enregistrées et cliquer sur <em>« Lancer un quiz sur mes lacunes »</em>.</td><td>Un quiz ciblé sur les <code>weakPoints</code> de l’enfant est généré et sauvegardé avec <code>targetedGaps</code> renseigné.</td></tr>
+                <tr data-mod="Quiz &amp; Pédagogie" data-prio="P2"><td><strong>TC-20</strong></td><td>Quiz &amp; Pédagogie</td><td><span class="pill pill-p2">P2</span></td><td>Ouvrir un quiz vide (cas limite réseau/corruption).</td><td>Écran de secours sûr affiché avec bouton retour, sans crash ni division par zéro.</td></tr>
+
+                <tr data-mod="Espace Parent" data-prio="P0"><td><strong>TC-21</strong></td><td>Espace Parent</td><td><span class="pill pill-p0">P0</span></td><td>Se connecter à l’Espace Parent et vérifier le récapitulatif d’un enfant.</td><td>Affichage des notes par matière, du graphique hebdomadaire et de la carte <strong>Bilan pédagogique</strong> (Lacunes à travailler + Compétences acquises).</td></tr>
+                <tr data-mod="Espace Parent" data-prio="P0"><td><strong>TC-22</strong></td><td>Espace Parent</td><td><span class="pill pill-p0">P0</span></td><td>Valider un quiz sur le profil de « Lina » puis observer les notifications parentales.</td><td>Une notification Android contenant le prénom <strong>« Lina »</strong> et le score s’affiche, et l’événement apparaît dans la cloche du tableau de bord.</td></tr>
+                <tr data-mod="Espace Parent" data-prio="P1"><td><strong>TC-23</strong></td><td>Espace Parent</td><td><span class="pill pill-p1">P1</span></td><td>Basculer entre 2 profils enfants (Lina et Léo) via le sélecteur parent.</td><td>Toutes les cartes (notes, graphique hebdo, acquis et lacunes) se mettent à jour instantanément pour l’enfant sélectionné.</td></tr>
+                <tr data-mod="Espace Parent" data-prio="P1"><td><strong>TC-24</strong></td><td>Espace Parent</td><td><span class="pill pill-p1">P1</span></td><td>Supprimer un profil enfant depuis l’Espace Parent.</td><td>Le profil et ses indicateurs disparaissent proprement du tableau de bord (aucune donnée orpheline comptabilisée).</td></tr>
+
+                <tr data-mod="UI &amp; DA" data-prio="P1"><td><strong>TC-25</strong></td><td>UI &amp; DA</td><td><span class="pill pill-p1">P1</span></td><td>Basculer le téléphone du mode clair au mode sombre sur l’accueil, les cours et le tableau de bord.</td><td>Le logo Quizzy bascule automatiquement entre sa variante claire et sombre (fond transparent) ; les contrastes restent lisibles.</td></tr>
+                <tr data-mod="UI &amp; DA" data-prio="P2"><td><strong>TC-26</strong></td><td>UI &amp; DA</td><td><span class="pill pill-p2">P2</span></td><td>Déclencher une génération IA de cours ou de quiz et observer le chargement.</td><td>Le loader moderne animé <code>QuizzyBookLoader</code> (pages d’un livre qui se tournent) s’affiche de façon fluide dans la DA Quizzy.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 7. TESTS AUTOMATISÉS (PLAYWRIGHT) -->
+        <!-- ======================================================= -->
+        <section class="doc-section" id="sec-playwright">
+          <div class="section-header">
+            <div class="section-badge navy">7</div>
+            <div>
+              <h2>7. Tests automatisés (Playwright)</h2>
+              <div class="section-sub">Architecture d’automatisation et suite E2E Playwright TypeScript prête à l’emploi</div>
+            </div>
+          </div>
+
+          <div class="callout yellow">
+            <strong>Note d’architecture transparente :</strong> Quizzy étant une application <strong>Android native Kotlin / Jetpack Compose</strong>, l’automatisation exécutée directement dans le pipeline Gradle repose sur <strong>JUnit4 + Robolectric Compose UI (45 tests)</strong> et <strong>Firebase Firestore Emulator (8 tests)</strong>. Ci-dessous figure la <strong>suite Playwright TypeScript complète</strong> conçue pour tester la prévisualisation web / portail compagnon Quizzy (ciblant les mêmes parcours critiques et les attributs <code>data-testid</code> alignés sur nos <code>testTag</code> Compose).
+          </div>
+
+          <div class="tabs no-print" role="tablist">
+            <button class="tab-btn active" onclick="switchTab(event, 'pw-config')">playwright.config.ts</button>
+            <button class="tab-btn" onclick="switchTab(event, 'pw-auth')">auth-portal.spec.ts</button>
+            <button class="tab-btn" onclick="switchTab(event, 'pw-child')">child-courses-quiz.spec.ts</button>
+            <button class="tab-btn" onclick="switchTab(event, 'pw-parent')">parent-dashboard.spec.ts</button>
+            <button class="tab-btn" onclick="switchTab(event, 'pw-cmd')">Installation &amp; Exécution</button>
+          </div>
+
+          <!-- Tab 1 -->
+          <div class="tab-pane active" id="pw-config">
+            <div class="code-box">
+              <div class="code-head"><span>playwright.config.ts</span><button class="copy-btn" onclick="copyCode(this)">Copier</button></div>
+              <pre><code>import { defineConfig, devices } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './e2e',
+  timeout: 45_000,
+  expect: { timeout: 10_000 },
+  fullyParallel: true,
+  retries: process.env.CI ? 2 : 0,
+  reporter: [
+    ['list'],
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
+    ['junit', { outputFile: 'test-results/playwright-junit.xml' }],
+  ],
+  use: {
+    baseURL: process.env.QUIZZY_BASE_URL ||
+      'https://ais-dev-hxidfi6wu5ebg2pbzm5ski-678533456299.europe-west3.run.app',
+    testIdAttribute: 'data-testid',
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+    locale: 'fr-FR',
+  },
+  projects: [
+    {
+      name: 'Mobile Chrome (Pixel 7)',
+      use: { ...devices['Pixel 7'] },
+    },
+    {
+      name: 'Mobile Safari (iPhone 14)',
+      use: { ...devices['iPhone 14'] },
+    },
+    {
+      name: 'Desktop Tablet View',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1024, height: 768 } },
+    },
+  ],
+});</code></pre>
+            </div>
+          </div>
+
+          <!-- Tab 2 -->
+          <div class="tab-pane" id="pw-auth">
+            <div class="code-box">
+              <div class="code-head"><span>e2e/auth-portal.spec.ts — Connexion, Portail &amp; Sécurité PIN</span><button class="copy-btn" onclick="copyCode(this)">Copier</button></div>
+              <pre><code>import { test, expect } from '@playwright/test';
+
+test.describe('Quizzy — Authentification &amp; Portail Sécurisé', () =&gt; {
+  test('TC-01 : Affiche le logo Quizzy et les 2 cartes Enfant / Parent', async ({ page }) =&gt; {
+    await page.goto('/');
+    await expect(page.getByTestId('quizzy_wordmark_logo')).toBeVisible();
+    await expect(page.getByTestId('auth_role_child')).toContainText('Je suis un enfant');
+    await expect(page.getByTestId('auth_role_parent')).toContainText('Je suis un parent');
+    await expect(page.getByTestId('google_sign_in_button')).toBeEnabled();
+  });
+
+  test('TC-04 : Vérifie le verrouillage PIN de l’espace Parent', async ({ page }) =&gt; {
+    await page.goto('/portal');
+    await page.getByTestId('portal_parent_admin_card').click();
+
+    // Saisie d'un mauvais PIN (9999)
+    for (const digit of ['9', '9', '9', '9']) {
+      await page.getByTestId(`pin_key_${digit}`).click();
+    }
+    await expect(page.getByText(/Code PIN incorrect/i)).toBeVisible();
+
+    // Saisie du bon PIN (1234)
+    for (const digit of ['1', '2', '3', '4']) {
+      await page.getByTestId(`pin_key_${digit}`).click();
+    }
+    await expect(page.getByTestId('parent_skills_recap_card')).toBeVisible();
+  });
+});</code></pre>
+            </div>
+          </div>
+
+          <!-- Tab 3 -->
+          <div class="tab-pane" id="pw-child">
+            <div class="code-box">
+              <div class="code-head"><span>e2e/child-courses-quiz.spec.ts — Cours, Dépôt Scrollable, Quiz Socratique &amp; 0 XP Replay</span><button class="copy-btn" onclick="copyCode(this)">Copier</button></div>
+              <pre><code>import { test, expect } from '@playwright/test';
+
+test.describe('Quizzy — Espace Enfant (Cours &amp; Quiz)', () =&gt; {
+  test('TC-06 &amp; TC-07 : Navigation 2 onglets + Popup dépôt scrollable avec Classement auto', async ({ page }) =&gt; {
+    await page.goto('/child/lina');
+
+    // Vérifier qu'il n'y a que Cours et Quiz (Atelier/Tuteur/Famille supprimés)
+    await expect(page.getByRole('tab', { name: 'Cours' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Quiz' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Atelier|Tuteur|Famille/i })).toHaveCount(0);
+
+    // Ouvrir la popup de dépôt et sélectionner Exercice + Classement auto
+    await page.getByRole('button', { name: /Ajouter un cours/i }).click();
+    const scrollBox = page.getByTestId('deposit_dialog_scroll_container');
+    await expect(scrollBox).toBeVisible();
+    await page.getByTestId('doctype_chip_Exercice').click();
+    await page.getByTestId('subject_chip_Auto').click();
+    await page.getByTestId('deposit_notes_input').fill(
+      'Exercice anglais : traduire canapé et conjuguer le verbe être.'
+    );
+
+    // Vérifier que le bouton de soumission est atteignable par scroll
+    const submitBtn = page.getByTestId('submit_deposit_button');
+    await submitBtn.scrollIntoViewIfNeeded();
+    await expect(submitBtn).toBeVisible();
+    await expect(submitBtn).toBeEnabled();
+  });
+
+  test('TC-13 &amp; TC-15 : Zéro-spoiler socratique sur QCM et Exercice à trous', async ({ page }) =&gt; {
+    await page.goto('/child/lina/quiz/english-vocab-1');
+
+    // Question à trous : mauvaise réponse volontaire
+    await page.getByTestId('quiz_fill_blank_input').fill('table');
+    await page.getByTestId('quiz_validate_button').click();
+
+    const banner = page.getByTestId('quiz_feedback_banner');
+    const hintCard = page.getByTestId('quiz_guiding_hint_card');
+    await expect(banner).toBeVisible();
+    await expect(banner).not.toContainText(/Bravo|Félicitations|Génial/i);
+    await expect(hintCard).toBeVisible();
+    // La bonne réponse ("sofa") ne doit JAMAIS être dévoilée dans l'indice
+    await expect(hintCard).not.toContainText(/sofa/i);
+
+    // Nouvel essai tolérant (espaces + majuscules)
+    await page.getByTestId('quiz_fill_blank_input').fill('  SOFA ');
+    await page.getByTestId('quiz_validate_button').click();
+    await expect(page.getByTestId('quiz_correct_explanation_card')).toBeVisible();
+  });
+
+  test('TC-18 : Rejouer un quiz déjà validé octroie strictement 0 XP', async ({ page }) =&gt; {
+    await page.goto('/child/lina/quiz/already-completed-quiz');
+    await expect(page.getByTestId('quiz_replay_mode_pill')).toContainText(/0 XP|Entraînement/i);
+  });
+
+  test('TC-19 : L’onglet Quiz propose le Quiz adapté aux lacunes', async ({ page }) =&gt; {
+    await page.goto('/child/lina?tab=quiz');
+    await expect(page.getByTestId('child_gap_quiz_card')).toBeVisible();
+    await expect(page.getByTestId('generate_gap_quiz_button')).toBeEnabled();
+  });
+});</code></pre>
+            </div>
+          </div>
+
+          <!-- Tab 4 -->
+          <div class="tab-pane" id="pw-parent">
+            <div class="code-box">
+              <div class="code-head"><span>e2e/parent-dashboard.spec.ts — Bilan pédagogique &amp; Notifications</span><button class="copy-btn" onclick="copyCode(this)">Copier</button></div>
+              <pre><code>import { test, expect } from '@playwright/test';
+
+test.describe('Quizzy — Tableau de bord Parent', () =&gt; {
+  test('TC-21 &amp; TC-22 : Affiche notes, acquis, lacunes et notification avec prénom', async ({ page }) =&gt; {
+    await page.goto('/parent/dashboard');
+
+    await expect(page.getByTestId('parent_subject_progress_card')).toBeVisible();
+    await expect(page.getByTestId('parent_weekly_chart_card')).toBeVisible();
+    await expect(page.getByTestId('parent_skills_recap_card')).toBeVisible();
+    await expect(page.getByTestId('parent_weak_points_section')).toBeVisible();
+    await expect(page.getByTestId('parent_acquired_skills_section')).toBeVisible();
+
+    // Vérifier la cloche de notifications parentales contenant le prénom de l'enfant
+    await page.getByTestId('parent_notifications_button').click();
+    const notifDialog = page.getByTestId('parent_notifications_dialog');
+    await expect(notifDialog).toBeVisible();
+    await expect(notifDialog).toContainText(/Lina/i);
+  });
+});</code></pre>
+            </div>
+          </div>
+
+          <!-- Tab 5 -->
+          <div class="tab-pane" id="pw-cmd">
+            <div class="code-box">
+              <div class="code-head"><span>Commandes Playwright (CI &amp; Local)</span><button class="copy-btn" onclick="copyCode(this)">Copier</button></div>
+              <pre><code># Initialiser Playwright dans un dossier e2e dédié
+npm init -y
+npm i -D @playwright/test
+npx playwright install chromium webkit
+
+# Lancer toute la suite sur l'URL de dev Quizzy
+QUIZZY_BASE_URL="https://ais-dev-hxidfi6wu5ebg2pbzm5ski-678533456299.europe-west3.run.app" \
+  npx playwright test
+
+# Ouvrir le rapport HTML interactif Playwright
+npx playwright show-report</code></pre>
+            </div>
+          </div>
+        </section>
+
+        <!-- ======================================================= -->
+        <!-- 8. RAPPORTS DE TESTS AUTO -->
+        <!-- ======================================================= -->
+        <section class="doc-section" id="sec-rapports">
+          <div class="section-header">
+            <div class="section-badge success">8</div>
+            <div>
+              <h2>8. Rapports de tests automatisés</h2>
+              <div class="section-sub">Synthèse factuelle des 53 tests automatisés réellement exécutés et validés sur le projet Quizzy</div>
+            </div>
+          </div>
+
+          <!-- KPI Summary -->
+          <div class="grid-4">
+            <div class="kpi-card">
+              <div class="kpi-value success">53 / 53</div>
+              <div class="kpi-label">Tests exécutés &amp; réussis</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-value primary">100 %</div>
+              <div class="kpi-label">Taux de réussite global</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-value">0</div>
+              <div class="kpi-label">Échecs ou régressions</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-value coral">BUILD OK</div>
+              <div class="kpi-label">APK Android &amp; Règles déployées</div>
+            </div>
+          </div>
+
+          <!-- Visual Donut + Suite Bars -->
+          <div class="grid-2" style="align-items:center;">
+            <div class="card" style="display:flex;align-items:center;gap:22px;justify-content:center;">
+              <svg width="136" height="136" viewBox="0 0 136 136" aria-label="Taux de réussite 100 pourcent">
+                <circle cx="68" cy="68" r="54" stroke="var(--border)" stroke-width="14" fill="none"/>
+                <circle cx="68" cy="68" r="54" stroke="var(--success)" stroke-width="14" fill="none"
+                        stroke-dasharray="339.29" stroke-dashoffset="0" stroke-linecap="round"
+                        transform="rotate(-90 68 68)"/>
+                <text x="68" y="66" text-anchor="middle" font-size="24" font-weight="900" fill="currentColor" style="color:var(--navy)">100%</text>
+                <text x="68" y="85" text-anchor="middle" font-size="11.5" font-weight="700" fill="currentColor" style="color:var(--text-muted)">53 PASS / 0 FAIL</text>
+              </svg>
+              <div>
+                <h4 style="margin-top:0;">Statut de la campagne</h4>
+                <p style="font-size:13.5px;color:var(--text-muted);margin-bottom:8px;">
+                  Dernière vérification complète exécutée via <code>gradle :app:testDebugUnitTest --rerun-tasks</code> et <code>firebase emulators:exec</code>.
+                </p>
+                <span class="pill pill-pass">✔ Prêt pour recette / démo</span>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="bar-row">
+                <div class="bar-head"><span>GamificationAndModelsTest.kt (Unit JVM)</span><span>14 / 14</span></div>
+                <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-head"><span>QuizzyUiFlowsRobolectricTest.kt (Compose UI)</span><span>13 / 13</span></div>
+                <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-head"><span>GeminiParsingAndDocumentsTest.kt (IA &amp; Docs)</span><span>9 / 9</span></div>
+                <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-head"><span>firestore.test.js (Règles Sécurité Emulator)</span><span>8 / 8</span></div>
+                <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+              </div>
+              <div class="bar-row" style="margin-bottom:0;">
+                <div class="bar-head"><span>FrenchErrorMessagesTest + Smoke Tests</span><span>9 / 9</span></div>
+                <div class="bar-track"><div class="bar-fill" style="width:100%"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <h3>8.1 Détail exhaustif des suites exécutées</h3>
+
+          <details open>
+            <summary>
+              <span>🔒 Suite 1 — Règles de sécurité Firestore (<code>firestore.test.js</code>)</span>
+              <span class="pill pill-pass">8 / 8 PASSED</span>
+            </summary>
+            <ul style="margin-top:12px;">
+              <li><code>Unauthenticated users are denied everywhere</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>Parent creates family, invite code, child profile, lesson, quiz and attempt</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>Stranger cannot read, list, or tamper with another family's data</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>Child with own Google account can join via valid invite code without pre-reading family</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>Quiz gamification fields (xp, bestStreak, badges, xpEarned, maxStreak) are validated properly</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>Lesson supports attachedFiles (PDF/documents) and enrichment updates</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>Family chat messages allow parent and joined child, reject strangers, updates, spoofed senderUid, and empty text</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>Competency evaluation (documentType, acquiredSkills, weakPoints, targetedGaps, masteredSkills/weakSkills) is validated properly</code> — <span class="pill pill-pass">PASS</span></li>
+            </ul>
+          </details>
+
+          <details open>
+            <summary>
+              <span>📱 Suite 2 — Parcours UI Compose Robolectric (<code>QuizzyUiFlowsRobolectricTest.kt</code>)</span>
+              <span class="pill pill-pass">13 / 13 PASSED</span>
+            </summary>
+            <ul style="margin-top:12px;">
+              <li><code>quizPlayerFullFlowAndReplayRefreshesXpAndBadgesBaseline</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>quizPlayerAlreadyCompletedQuizStartsInZeroXpTrainingMode</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>quizPlayerEmptyQuizShowsSafeFallback</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>quizPlayerWrongAnswerNeverRevealsAnswerGuidesChildAndReportsWeakSkills</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>quizPlayerFillBlankClassroomExerciseGuidesWithoutSpoilingThenAcceptsAnswer</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>profilePortalShowsChildSpecificMessageWhenChildProfileMissing</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>profilePortalParentPinFlowValidatesCorrectly</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>familySetupClearsErrorOnRoleSwitchAndValidatesInviteForm</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>childSpaceHasOnlyCoursAndQuizTabsAndSupportsDocTypeAndAutoFilingDeposit</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>childSpaceQuizTabShowsWeakPointsAndTriggersGapQuiz</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>parentDashboardShowsNotesAcquiredSkillsAndLacunesWithNotificationsAndNoChat</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>quizNotificationHelperPostsAndroidNotificationWithChildName</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>quizzyWordmarkLogoAndAnimatedBookLoaderRenderInLightAndDarkModes</code> — <span class="pill pill-pass">PASS</span></li>
+            </ul>
+          </details>
+
+          <details>
+            <summary>
+              <span>🧠 Suite 3 — Logique métier, Gamification &amp; Socratique (<code>GamificationAndModelsTest.kt</code>)</span>
+              <span class="pill pill-pass">14 / 14 PASSED</span>
+            </summary>
+            <ul style="margin-top:12px;">
+              <li><code>childSuccessRatePercentHandlesZeroAndBounds</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>calculateQuizXpAppliesDifficultyMultiplierStreakAndPerfectBonus</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>starsForPercentageMatchesThresholds</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>levelProgressHandlesAllTiersAndNegativeXpSafely</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>computeUnlockedBadgesUnlocksAllMilestonesWithoutDuplicates</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>challengerBadgeRequiresAtLeast60PercentInDefiMode</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>pinHasherProducesValidSha256AndValidInviteCodes</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>schoolCatalogSuggestedAgesStayWithinFirestoreAllowedRange</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>fileFormattingHelpersProduceExpectedFrenchLabels</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>sanitizeNeutralExplanationStripsBravoAndPraiseOpeners</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>quizAnswerEvaluatorMatchesFillBlankWithCaseAccentAndPunctuationTolerance</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>schoolCatalogNormalizesSubjectsAndDocumentTypesAccurately</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>skillTrackerHelperGraduatesMasteredSkillsAndRecordsNewGaps</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>safeGuidingHintBlocksLeakedAnswersAndKeepsSocraticHints</code> — <span class="pill pill-pass">PASS</span></li>
+            </ul>
+          </details>
+
+          <details>
+            <summary>
+              <span>📄 Suite 4 — Parsing Gemini &amp; Extraction Documents (<code>GeminiParsingAndDocumentsTest.kt</code>)</span>
+              <span class="pill pill-pass">9 / 9 PASSED</span>
+            </summary>
+            <ul style="margin-top:12px;">
+              <li><code>stripJsonFencesCleansMarkdownCodeBlocksAndNoise</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>parseLessonAndQuizResponseHandlesValidMarkdownWrappedJson</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>parseLessonAndQuizResponseGuardsBlankFieldsForFirestoreRules</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>parseLessonAndQuizResponseFailsWhenNoValidQuestionsExist</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>parseLessonAndQuizResponseParsesAutoSubjectSkillsAndMixedFillBlankQuestions</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>normalizeChatHistoryFixesFailedTurnOrphanUserAndMergesConsecutiveRoles</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>extractTextFromDocxPreservesParagraphAndTabBreaksWithXmlNamespaces</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>extractTextFromOdtAndPptxPreservesStructure</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>fileProviderSupportsBothLessonPhotosAndStudioPhotosDirectories</code> — <span class="pill pill-pass">PASS</span></li>
+            </ul>
+          </details>
+
+          <details>
+            <summary>
+              <span>🇫🇷 Suite 5 — Messages d’erreur français &amp; Smoke Tests (<code>FrenchErrorMessagesTest.kt</code> + Smoke)</span>
+              <span class="pill pill-pass">9 / 9 PASSED</span>
+            </summary>
+            <ul style="margin-top:12px;">
+              <li><code>highDemandEnglishErrorIsTranslatedToFrench</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>unknownHostExceptionIsTranslatedToFrench</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>socketTimeoutExceptionIsTranslatedToFrench</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>firestoreExceptionsAreTranslatedToFrench</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>jsonAndPayloadAndAppCheckErrorsAreTranslatedToFrench</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>unknownEnglishSdkMessageFallsBackToFrench</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>frenchMessageIsPreserved</code> — <span class="pill pill-pass">PASS</span></li>
+              <li><code>ExampleUnitTest.addition_isCorrect</code> &amp; <code>ExampleRobolectricTest.read string from context</code> — <span class="pill pill-pass">PASS</span></li>
+            </ul>
+          </details>
+
+          <div class="callout" style="margin-top:18px;">
+            <strong>Statut Playwright CI :</strong> La suite Playwright TypeScript (section 7) est livrée prête à l’exécution dans un runner Node/Navigateur CI (<code>npx playwright test</code>) et génère nativement ses propres artefacts <code>playwright-report/index.html</code> et <code>test-results/playwright-junit.xml</code>. Dans l’environnement de build Android actuel (sans navigateur Playwright), la couverture équivalente des écrans et règles a été exécutée et validée à <strong>100 % via Robolectric + Firestore Emulator</strong>.
+          </div>
+        </section>
+
+        <footer style="text-align:center;color:var(--text-muted);font-size:13px;padding:12px 0 24px;">
+          Documentation Quizzy v1.0 • Générée pour l’application Android éducative Quizzy (<code>com.aistudio.edufamille.kxmrpq</code>)
+        </footer>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Theme toggle
+    const root = document.documentElement;
+    const toggleTheme = () => {
+      const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+    };
+    document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
+    document.getElementById('themeToggleMobile')?.addEventListener('click', toggleTheme);
+
+    // Mobile sidebar toggle
+    const sidebar = document.getElementById('sidebar');
+    document.getElementById('menuToggle')?.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+    });
+    document.querySelectorAll('.nav-link').forEach(link => {
+      link.addEventListener('click', () => sidebar.classList.remove('open'));
+    });
+
+    // Active section highlight on scroll
+    const sections = Array.from(document.querySelectorAll('section.doc-section'));
+    const navLinks = Array.from(document.querySelectorAll('.nav-link'));
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          navLinks.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + entry.target.id));
+        }
+      });
+    }, { rootMargin: '-25% 0px -65% 0px' });
+    sections.forEach(sec => observer.observe(sec));
+
+    // Manual test cases search & filter
+    const tcSearch = document.getElementById('tcSearch');
+    const tcModule = document.getElementById('tcModule');
+    const tcPriority = document.getElementById('tcPriority');
+    const tcRows = Array.from(document.querySelectorAll('#tcTable tbody tr'));
+    const tcCount = document.getElementById('tcCount');
+
+    function filterTC() {
+      const q = (tcSearch.value || '').toLowerCase().trim();
+      const mod = tcModule.value;
+      const prio = tcPriority.value;
+      let visible = 0;
+      tcRows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        const matchQ = !q || text.includes(q);
+        const matchMod = mod === 'ALL' || row.dataset.mod === mod;
+        const matchPrio = prio === 'ALL' || row.dataset.prio === prio;
+        const show = matchQ && matchMod && matchPrio;
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+      tcCount.textContent = `${visible} cas affiché${visible > 1 ? 's' : ''}`;
+    }
+    tcSearch?.addEventListener('input', filterTC);
+    tcModule?.addEventListener('change', filterTC);
+    tcPriority?.addEventListener('change', filterTC);
+
+    // Playwright code tabs
+    function switchTab(ev, paneId) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      ev.currentTarget.classList.add('active');
+      document.getElementById(paneId)?.classList.add('active');
+    }
+
+    // Copy code button
+    function copyCode(btn) {
+      const pre = btn.closest('.code-box')?.querySelector('pre');
+      if (!pre) return;
+      navigator.clipboard?.writeText(pre.innerText).then(() => {
+        const prev = btn.textContent;
+        btn.textContent = 'Copié !';
+        setTimeout(() => (btn.textContent = prev), 1400);
+      });
+    }
+  </script>
+</body>
+</html>

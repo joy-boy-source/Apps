@@ -1,0 +1,8 @@
+{
+  "name": "Quizzy",
+  "description": "Application d'aide aux devoirs avec espace parent admin (suivi et taux de réussite) et espace enfant (synthèses de cours par photo adaptées à l'âge et quiz interactifs).",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

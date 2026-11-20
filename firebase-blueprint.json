@@ -1,0 +1,209 @@
+{
+  "entities": {
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Compte utilisateur Google lié à un foyer EduFamille.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "UID Firebase Auth de l'utilisateur" },
+        "displayName": { "type": "string", "description": "Nom affiché de l'utilisateur" },
+        "role": { "type": "string", "enum": ["PARENT", "CHILD"], "description": "Rôle dans le foyer" },
+        "familyId": { "type": "string", "description": "Identifiant du foyer" },
+        "linkedChildId": { "type": "string", "description": "ID du profil enfant associé si compte enfant" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" }
+      },
+      "required": ["userId", "displayName", "role", "familyId", "createdAt", "updatedAt"]
+    },
+    "Family": {
+      "title": "Family",
+      "description": "Foyer familial administré par les parents.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "description": "UID du parent administrateur" },
+        "familyName": { "type": "string", "description": "Nom de la famille" },
+        "inviteCode": { "type": "string", "description": "Code d'invitation à 6 caractères" },
+        "parentPinHash": { "type": "string", "description": "Hash SHA-256 du code PIN administrateur parent" },
+        "memberUids": { "type": "array", "description": "Liste des UIDs Google autorisés dans le foyer" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" }
+      },
+      "required": ["ownerId", "familyName", "inviteCode", "parentPinHash", "memberUids", "createdAt", "updatedAt"]
+    },
+    "InviteCode": {
+      "title": "InviteCode",
+      "description": "Correspondance directe entre un code d'invitation et un foyer.",
+      "type": "object",
+      "properties": {
+        "familyId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "familyName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" }
+      },
+      "required": ["familyId", "ownerId", "familyName", "createdAt"]
+    },
+    "ChildProfile": {
+      "title": "ChildProfile",
+      "description": "Profil scolaire individuel d'un enfant avec connexion par code PIN.",
+      "type": "object",
+      "properties": {
+        "familyId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "linkedUid": { "type": "string" },
+        "name": { "type": "string" },
+        "age": { "type": "integer" },
+        "gradeLevel": { "type": "string" },
+        "avatarKey": { "type": "string" },
+        "pinHash": { "type": "string" },
+        "lessonsCount": { "type": "integer" },
+        "quizzesTaken": { "type": "integer" },
+        "totalCorrect": { "type": "integer" },
+        "totalQuestions": { "type": "integer" },
+        "xp": { "type": "integer" },
+        "bestStreak": { "type": "integer" },
+        "badges": { "type": "array" },
+        "acquiredSkills": { "type": "array", "description": "Compétences acquises par l'enfant" },
+        "weakPoints": { "type": "array", "description": "Lacunes et notions à travailler" },
+        "weeklyMissedQuestions": { "type": "array", "description": "Erreurs commises dès le 1er essai stockées pour le quiz de révision du dimanche 14h" },
+        "lastSundayQuizWeekKey": { "type": "string", "description": "Clé de la dernière semaine (ex: 2026-W47) dont le quiz du dimanche a été généré/complété" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" }
+      },
+      "required": ["familyId", "ownerId", "memberUids", "name", "age", "gradeLevel", "avatarKey", "pinHash", "lessonsCount", "quizzesTaken", "totalCorrect", "totalQuestions", "createdAt", "updatedAt"]
+    },
+    "Lesson": {
+      "title": "Lesson",
+      "description": "Cours, exercice ou devoir déposé par matière avec synthèse, compétences acquises et lacunes générées par Gemini.",
+      "type": "object",
+      "properties": {
+        "familyId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "childId": { "type": "string" },
+        "childName": { "type": "string" },
+        "gradeLevel": { "type": "string" },
+        "childAge": { "type": "integer" },
+        "subject": { "type": "string" },
+        "documentType": { "type": "string", "enum": ["Cours", "Exercice", "Devoir"] },
+        "title": { "type": "string" },
+        "sourceNotes": { "type": "string" },
+        "summaryIntro": { "type": "string" },
+        "keyPoints": { "type": "array" },
+        "simpleExplanation": { "type": "string" },
+        "memoryTip": { "type": "string" },
+        "acquiredSkills": { "type": "array" },
+        "weakPoints": { "type": "array" },
+        "evaluationSummary": { "type": "string" },
+        "photoAttached": { "type": "boolean" },
+        "attachedFiles": { "type": "array" },
+        "quizCount": { "type": "integer" },
+        "bestScorePercent": { "type": "integer" },
+        "attemptsCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" }
+      },
+      "required": ["familyId", "ownerId", "memberUids", "childId", "childName", "gradeLevel", "childAge", "subject", "title", "sourceNotes", "summaryIntro", "keyPoints", "simpleExplanation", "memoryTip", "photoAttached", "quizCount", "attemptsCount", "createdAt", "updatedAt"]
+    },
+    "Quiz": {
+      "title": "Quiz",
+      "description": "Quiz adaptatif (QCM interactifs et exercices à compléter) ciblant les notions et lacunes de l'enfant.",
+      "type": "object",
+      "properties": {
+        "familyId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "lessonId": { "type": "string" },
+        "childId": { "type": "string" },
+        "subject": { "type": "string" },
+        "title": { "type": "string" },
+        "difficulty": { "type": "string", "enum": ["Facile", "Moyen", "Défi"] },
+        "questions": { "type": "array" },
+        "targetedGaps": { "type": "array" },
+        "weeklyReview": { "type": "boolean", "description": "Indique s'il s'agit du quiz récapitulatif du dimanche 14h (10 questions)" },
+        "weekKey": { "type": "string", "description": "Identifiant de la semaine du quiz récapitulatif (ex: 2026-W47)" },
+        "lastScorePercent": { "type": "integer" },
+        "attemptsCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" }
+      },
+      "required": ["familyId", "ownerId", "memberUids", "lessonId", "childId", "subject", "title", "difficulty", "questions", "attemptsCount", "createdAt", "updatedAt"]
+    },
+    "QuizAttempt": {
+      "title": "QuizAttempt",
+      "description": "Résultat d'un quiz passé par un enfant avec compétences maîtrisées et lacunes pour le suivi parental.",
+      "type": "object",
+      "properties": {
+        "familyId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "childId": { "type": "string" },
+        "childName": { "type": "string" },
+        "lessonId": { "type": "string" },
+        "lessonTitle": { "type": "string" },
+        "quizId": { "type": "string" },
+        "subject": { "type": "string" },
+        "score": { "type": "integer" },
+        "totalQuestions": { "type": "integer" },
+        "percentage": { "type": "integer" },
+        "xpEarned": { "type": "integer" },
+        "maxStreak": { "type": "integer" },
+        "masteredSkills": { "type": "array" },
+        "weakSkills": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" }
+      },
+      "required": ["familyId", "ownerId", "memberUids", "childId", "childName", "lessonId", "lessonTitle", "quizId", "subject", "score", "totalQuestions", "percentage", "createdAt"]
+    },
+    "FamilyMessage": {
+      "title": "FamilyMessage",
+      "description": "Message échangé en temps réel dans le chat familial entre parents et enfants.",
+      "type": "object",
+      "properties": {
+        "familyId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "channelId": { "type": "string", "description": "'FAMILY' pour le groupe famille ou childId pour une discussion privée parent-enfant" },
+        "senderRole": { "type": "string", "enum": ["PARENT", "CHILD"] },
+        "senderName": { "type": "string" },
+        "senderUid": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "FieldValue.serverTimestamp()" }
+      },
+      "required": ["familyId", "ownerId", "memberUids", "channelId", "senderRole", "senderName", "senderUid", "text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Compte Google de l'utilisateur courant et lien avec son foyer."
+    },
+    "/families/{familyId}": {
+      "schema": { "$ref": "#/entities/Family" },
+      "description": "Foyer familial et liste des membres autorisés."
+    },
+    "/invite_codes/{code}": {
+      "schema": { "$ref": "#/entities/InviteCode" },
+      "description": "Index de recherche directe par code d'invitation."
+    },
+    "/families/{familyId}/children/{childId}": {
+      "schema": { "$ref": "#/entities/ChildProfile" },
+      "description": "Profils des enfants rattachés au foyer."
+    },
+    "/families/{familyId}/lessons/{lessonId}": {
+      "schema": { "$ref": "#/entities/Lesson" },
+      "description": "Cours déposés par matière et synthèses générées."
+    },
+    "/families/{familyId}/quizzes/{quizId}": {
+      "schema": { "$ref": "#/entities/Quiz" },
+      "description": "Quiz générés en fonction des cours déposés."
+    },
+    "/families/{familyId}/quiz_attempts/{attemptId}": {
+      "schema": { "$ref": "#/entities/QuizAttempt" },
+      "description": "Historique des résultats de quiz pour suivi parental."
+    },
+    "/families/{familyId}/family_messages/{messageId}": {
+      "schema": { "$ref": "#/entities/FamilyMessage" },
+      "description": "Messages du chat familial entre parents et enfants."
+    }
+  }
+}
