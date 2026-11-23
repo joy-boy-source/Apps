@@ -42,6 +42,9 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.data.FamilyRepository
 import com.example.data.GeminiTutorService
 import com.example.data.authStateFlow
+import com.example.data.local.ChildSqlOverview
+import com.example.data.local.LocalSqlRepository
+import com.example.data.local.QuizzySqlDatabase
 import com.example.data.signOut
 import com.example.firebase.configureAppCheck
 import com.example.model.UiState
@@ -124,11 +127,17 @@ private fun AuthenticatedRoot(
                 }
                 val databaseId = app.getString(R.string.firestore_database_id)
                 val db = FirebaseFirestore.getInstance(databaseId)
+                val sqlDb = QuizzySqlDatabase.getInstance(app)
+                val localSqlRepository = LocalSqlRepository(
+                    dao = sqlDb.quizzySqlDao(),
+                    appContext = app
+                )
                 EduFamilleViewModel(
                     repository = FamilyRepository(db),
                     geminiService = GeminiTutorService(),
                     currentUserId = currentUserId,
-                    defaultDisplayName = defaultDisplayName
+                    defaultDisplayName = defaultDisplayName,
+                    localSqlRepository = localSqlRepository
                 )
             }
         }
@@ -140,6 +149,13 @@ private fun AuthenticatedRoot(
     val pinError by viewModel.pinError.collectAsStateWithLifecycle()
     val isTranscribing by viewModel.isTranscribing.collectAsStateWithLifecycle()
     val transcribeError by viewModel.transcribeError.collectAsStateWithLifecycle()
+    val imageStudioState by viewModel.imageStudioState.collectAsStateWithLifecycle()
+    val allTopGameScores by viewModel.allTopGameScores.collectAsStateWithLifecycle()
+    val allStudioImages by viewModel.allStudioImages.collectAsStateWithLifecycle()
+    val allSubjectSqlStats by viewModel.allSubjectSqlStats.collectAsStateWithLifecycle()
+    val exerciseOpStatus by viewModel.exerciseOpStatus.collectAsStateWithLifecycle()
+    val gradingExerciseItemKeys by viewModel.gradingExerciseItemKeys.collectAsStateWithLifecycle()
+    val finalizingExerciseSheetIds by viewModel.finalizingExerciseSheetIds.collectAsStateWithLifecycle()
 
     var notificationsPermissionGranted by remember {
         mutableStateOf(QuizNotificationHelper.hasNotificationPermission(context))
@@ -320,6 +336,18 @@ private fun AuthenticatedRoot(
                                 val ids = bundle.attempts.map { it.id }.filter { it.isNotBlank() }
                                 QuizNotificationHelper.markAttemptsRead(context, family.id, ids)
                                 readAttemptIds = QuizNotificationHelper.getReadAttemptIds(context, family.id)
+                            },
+                            sqlGameScores = allTopGameScores,
+                            sqlStudioImagesCount = allStudioImages.size,
+                            sqlSubjectStats = allSubjectSqlStats,
+                            onUpdateChildLanguageTone = { childId, toneLevel ->
+                                viewModel.updateChildLanguageTone(family.id, childId, toneLevel)
+                            },
+                            onAddChildWithTone = { name, age, grade, avatar, pin, toneLevel ->
+                                viewModel.addChild(family, name, age, grade, avatar, pin, toneLevel)
+                            },
+                            onEditChildWithTone = { id, name, age, grade, avatar, pin, toneLevel ->
+                                viewModel.updateChildAdmin(family.id, id, name, age, grade, avatar, pin, toneLevel)
                             }
                         )
                     }
@@ -346,6 +374,22 @@ private fun AuthenticatedRoot(
                                 }
                             }
                         } else {
+                            val childGameScores by remember(activeChild.id) {
+                                viewModel.observeChildGameScores(activeChild.id)
+                            }.collectAsStateWithLifecycle(initialValue = emptyList())
+                            val childStudioImages by remember(activeChild.id) {
+                                viewModel.observeChildStudioImages(activeChild.id)
+                            }.collectAsStateWithLifecycle(initialValue = emptyList())
+                            val childSubjectSqlStats by remember(activeChild.id) {
+                                viewModel.observeChildSubjectSqlStats(activeChild.id)
+                            }.collectAsStateWithLifecycle(initialValue = emptyList())
+                            val childSqlOverview by remember(activeChild.id) {
+                                viewModel.observeChildSqlOverview(activeChild.id)
+                            }.collectAsStateWithLifecycle(initialValue = ChildSqlOverview())
+                            val childExerciseSheets by remember(activeChild.id) {
+                                viewModel.observeChildExerciseSheets(activeChild.id)
+                            }.collectAsStateWithLifecycle(initialValue = emptyList())
+
                             ChildSpaceScreen(
                                 family = family,
                                 child = activeChild,
@@ -407,6 +451,63 @@ private fun AuthenticatedRoot(
                                 },
                                 onTranscribeAudio = { bytes, onResult ->
                                     viewModel.transcribeAudio(bytes, onResult = onResult)
+                                },
+                                childGameScores = childGameScores,
+                                childStudioImages = childStudioImages,
+                                childSubjectSqlStats = childSubjectSqlStats,
+                                childSqlOverview = childSqlOverview,
+                                imageStudioState = imageStudioState,
+                                onRecord3DGameFinished = { score, correctCount, totalQuestions, maxCombo, durationSec, subject ->
+                                    viewModel.record3DGameScore(
+                                        child = activeChild,
+                                        score = score,
+                                        correctCount = correctCount,
+                                        totalQuestions = totalQuestions,
+                                        maxCombo = maxCombo,
+                                        durationSeconds = durationSec,
+                                        subject = subject
+                                    )
+                                },
+                                onGenerateStudioImage = { prompt, styleLabel, subject ->
+                                    viewModel.generateStudioImage(activeChild, prompt, styleLabel, subject)
+                                },
+                                onEditStudioImage = { bitmap, editInstruction, basePrompt, subject ->
+                                    viewModel.editStudioImage(activeChild, bitmap, editInstruction, basePrompt, subject)
+                                },
+                                onLoadStudioBitmap = { path -> viewModel.loadStudioBitmap(path) },
+                                onDeleteStudioImage = { item -> viewModel.deleteStudioImage(item) },
+                                onResetImageStudioState = { viewModel.resetImageStudioState() },
+                                exerciseSheets = childExerciseSheets,
+                                exerciseOpStatus = exerciseOpStatus,
+                                gradingExerciseItemKeys = gradingExerciseItemKeys,
+                                onClearExerciseOpStatus = { viewModel.clearExerciseOpStatus() },
+                                onDepositExercise = { subject, bitmap, attachments, notes ->
+                                    viewModel.createIdenticalExercise(
+                                        child = activeChild,
+                                        subject = subject,
+                                        bitmap = bitmap,
+                                        attachments = attachments,
+                                        notes = notes
+                                    )
+                                },
+                                onGradeExerciseItem = { sheet, item, answer ->
+                                    viewModel.gradeExerciseItemAnswer(
+                                        child = activeChild,
+                                        sheet = sheet,
+                                        item = item,
+                                        studentAnswer = answer
+                                    )
+                                },
+                                onDeleteExerciseSheet = { sheetId ->
+                                    viewModel.deleteExerciseSheet(sheetId)
+                                },
+                                finalizingExerciseSheetIds = finalizingExerciseSheetIds,
+                                onFinalizeExercise = { sheet, draftAnswersByItemId ->
+                                    viewModel.finalizeExerciseSheet(
+                                        child = activeChild,
+                                        sheet = sheet,
+                                        draftAnswersByItemId = draftAnswersByItemId
+                                    )
                                 }
                             )
                         }

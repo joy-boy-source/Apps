@@ -423,7 +423,8 @@ class FamilyRepository(
         age: Int,
         gradeLevel: String,
         avatarKey: String,
-        pin: String
+        pin: String,
+        languageToneLevel: String = com.example.model.LanguageToneCatalog.AUTO
     ): Result<String> {
         val docRef = db.collection("families").document(family.id).collection("children").document()
         return try {
@@ -443,6 +444,7 @@ class FamilyRepository(
                 "gradeLevel" to gradeLevel.trim().take(30),
                 "avatarKey" to avatarKey,
                 "pinHash" to PinHasher.hashPin(pin),
+                "languageToneLevel" to com.example.model.LanguageToneCatalog.normalize(languageToneLevel),
                 "lessonsCount" to 0L,
                 "quizzesTaken" to 0L,
                 "totalCorrect" to 0L,
@@ -496,7 +498,8 @@ class FamilyRepository(
         age: Int,
         gradeLevel: String,
         avatarKey: String,
-        newPin: String?
+        newPin: String?,
+        languageToneLevel: String? = null
     ): Result<Unit> {
         val docRef = db.collection("families").document(familyId).collection("children").document(childId)
         return try {
@@ -511,11 +514,37 @@ class FamilyRepository(
                 "avatarKey" to avatarKey,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
+            if (!languageToneLevel.isNullOrBlank()) {
+                updates["languageToneLevel"] = com.example.model.LanguageToneCatalog.normalize(languageToneLevel)
+            }
             if (!newPin.isNullOrBlank()) {
                 require(newPin.length == 4 && newPin.all { it.isDigit() }) { "PIN à 4 chiffres requis." }
                 updates["pinHash"] = PinHasher.hashPin(newPin)
             }
             docRef.update(updates).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, docRef.path)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateChildLanguageTone(
+        familyId: String,
+        childId: String,
+        languageToneLevel: String
+    ): Result<Unit> {
+        val docRef = db.collection("families").document(familyId).collection("children").document(childId)
+        return try {
+            requireUserId()
+            docRef.update(
+                mapOf(
+                    "languageToneLevel" to com.example.model.LanguageToneCatalog.normalize(languageToneLevel),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
@@ -1099,6 +1128,8 @@ class FamilyRepository(
                 "prompt" to q.prompt,
                 "options" to q.options,
                 "correctIndex" to q.correctIndex.toLong(),
+                "correctIndices" to q.correctIndices.map { it.toLong() },
+                "allowMultipleSelection" to q.allowMultipleSelection,
                 "explanation" to q.explanation,
                 "questionType" to q.questionType,
                 "sentenceTemplate" to q.sentenceTemplate,

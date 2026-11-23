@@ -10,6 +10,12 @@ import android.provider.OpenableColumns
 import android.util.Log
 import android.util.Xml
 import com.example.model.AttachedDocument
+import com.example.model.ExerciseFinalEvaluation
+import com.example.model.ExerciseGradingResult
+import com.example.model.ExerciseItem
+import com.example.model.ExerciseSheet
+import com.example.model.ExtractedExerciseResult
+import com.example.model.LanguageToneCatalog
 import com.example.model.Lesson
 import com.example.model.MissedQuestionRecord
 import com.example.model.QuizImageOption
@@ -39,6 +45,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 
 enum class TutorMode(
@@ -170,7 +177,14 @@ class GeminiTutorService {
                 items = imageOptionSchema,
                 description = "Pour IMAGE_CHOICE uniquement : exactement 4 cartes illustrées {label, visualKey} sur lesquelles l'enfant clique pour choisir la bonne image. Liste vide [] sinon"
             ),
-            "correctIndex" to Schema.integer(description = "Pour MCQ ou IMAGE_CHOICE : index de la bonne réponse entre 0 et 3. Sinon : 0"),
+            "correctIndex" to Schema.integer(description = "Pour MCQ ou IMAGE_CHOICE : index de la bonne réponse entre 0 et 3 (ou le 1er index correct si plusieurs réponses sont bonnes). Sinon : 0"),
+            "correctIndices" to Schema.array(
+                items = Schema.integer(),
+                description = "Pour MCQ ou IMAGE_CHOICE : liste de TOUS les index corrects entre 0 et 3 (ex: [1] pour une seule bonne réponse, ou [0, 2] si plusieurs réponses sont attendues). Liste vide [] sinon"
+            ),
+            "allowMultipleSelection" to Schema.boolean(
+                description = "true si le MCQ ou IMAGE_CHOICE nécessite ou accepte PLUSIEURS réponses simultanées (ex: 'Quels sont...', 'Coche les bonnes réponses'), false s'il n'y a qu'une seule bonne réponse"
+            ),
             "acceptedAnswers" to Schema.array(
                 items = Schema.string(),
                 description = "Pour FILL_BLANK : 1 à 4 réponses exactes acceptées (ex: ['sofa', 'couch']). Liste vide [] sinon"
@@ -349,6 +363,26 @@ class GeminiTutorService {
         )
     }
 
+    private val imageLiteFallbackModel by lazy {
+        Firebase.ai.generativeModel(
+            modelName = "gemini-3.1-flash-lite-image",
+            generationConfig = generationConfig {
+                responseModalities = listOf(ResponseModality.IMAGE)
+            },
+            requestOptions = longRequestOptions
+        )
+    }
+
+    private val imageProFallbackModel by lazy {
+        Firebase.ai.generativeModel(
+            modelName = "gemini-3-pro-image",
+            generationConfig = generationConfig {
+                responseModalities = listOf(ResponseModality.IMAGE)
+            },
+            requestOptions = longRequestOptions
+        )
+    }
+
     suspend fun analyzeLessonAndCreateQuiz(
         bitmap: Bitmap?,
         attachments: List<CourseAttachment> = emptyList(),
@@ -359,10 +393,11 @@ class GeminiTutorService {
         childName: String,
         childAge: Int,
         gradeLevel: String,
-        existingWeakPoints: List<String> = emptyList()
+        existingWeakPoints: List<String> = emptyList(),
+        languageToneLevel: String = LanguageToneCatalog.AUTO
     ): Result<GeneratedLessonAndQuiz> {
         return try {
-            val toneInstruction = ageToneInstruction(childAge)
+            val toneInstruction = ageToneInstruction(childAge, gradeLevel, languageToneLevel)
             val safeDocType = SchoolCatalog.normalizeDocumentType(documentType)
             val safeDifficulty = SchoolCatalog.normalizeDifficulty(difficulty)
             val difficultyLabel = SchoolCatalog.difficultyMultiplierLabel(safeDifficulty)
@@ -378,8 +413,9 @@ class GeminiTutorService {
                 } else {
                     appendLine("Matière choisie : $subject (confirme-la dans 'detectedSubject' parmi : Mathématiques, Français, Histoire-Géo, Sciences, Anglais, Physique-Chimie, SVT, Autre).")
                 }
-                appendLine("Consigne de niveau : $toneInstruction")
+                appendLine("CONSIGNE OBLIGATOIRE DE LANGAGE ET MATURITÉ (pour TOUS les textes : synthèse, détails, conseils, indices, explications) : $toneInstruction")
                 appendLine(difficultyGuidanceInstruction(safeDifficulty))
+                appendLine("RÈGLE QCM MULTI-RÉPONSES : Si une question MCQ ou IMAGE_CHOICE comporte plusieurs bonnes réponses, mets OBLIGATOIREMENT allowMultipleSelection = true et renseigne TOUS les index corrects dans correctIndices.")
                 if (existingWeakPoints.isNotEmpty()) {
                     appendLine("Lacunes déjà repérées chez $childName : ${existingWeakPoints.take(8).joinToString(" ; ")}.")
                 }
@@ -458,16 +494,18 @@ class GeminiTutorService {
         childName: String,
         childAge: Int,
         gradeLevel: String,
-        existingWeakPoints: List<String> = emptyList()
+        existingWeakPoints: List<String> = emptyList(),
+        languageToneLevel: String = LanguageToneCatalog.AUTO
     ): Result<GeneratedLessonAndQuiz> {
         return try {
-            val toneInstruction = ageToneInstruction(childAge)
+            val toneInstruction = ageToneInstruction(childAge, gradeLevel, languageToneLevel)
 
             val promptText = buildString {
                 appendLine("Tu es un professeur particulier bienveillant et pédagogue.")
                 appendLine("L'élève s'appelle $childName, a $childAge ans et est en classe de $gradeLevel.")
                 appendLine("Matière : ${existingLesson.subject} — Document existant (${existingLesson.documentType}) : ${existingLesson.title}")
-                appendLine("Consigne de niveau : $toneInstruction")
+                appendLine("CONSIGNE OBLIGATOIRE DE LANGAGE ET MATURITÉ (synthèse, détails, conseils, indices, explications) : $toneInstruction")
+                appendLine("RÈGLE QCM MULTI-RÉPONSES : Si une question MCQ ou IMAGE_CHOICE admet plusieurs bonnes réponses, mets allowMultipleSelection = true et remplis tous les index dans correctIndices.")
                 if (existingWeakPoints.isNotEmpty()) {
                     appendLine("Lacunes actuelles à travailler : ${existingWeakPoints.take(8).joinToString(" ; ")}.")
                 }
@@ -683,13 +721,17 @@ class GeminiTutorService {
         gradeLevel: String,
         difficulty: String,
         existingQuizCount: Int,
-        childWeakPoints: List<String> = emptyList()
+        childWeakPoints: List<String> = emptyList(),
+        languageToneLevel: String = LanguageToneCatalog.AUTO
     ): Result<GeneratedQuiz> {
         return try {
+            val toneInstruction = ageToneInstruction(childAge, gradeLevel, languageToneLevel)
             val promptText = buildString {
                 appendLine("Tu es un professeur particulier bienveillant pour un élève de $childAge ans en classe de $gradeLevel.")
                 appendLine("Matière : $subject — Cours : $lessonTitle")
                 appendLine("Difficulté demandée : $difficulty.")
+                appendLine("CONSIGNE OBLIGATOIRE DE LANGAGE ET MATURITÉ (questions, indices, explications, conseils) : $toneInstruction")
+                appendLine("RÈGLE QCM MULTI-RÉPONSES : Si une question MCQ ou IMAGE_CHOICE nécessite plusieurs réponses, mets allowMultipleSelection = true et liste TOUS les index corrects dans correctIndices.")
                 appendLine("Synthèse du cours :")
                 appendLine(summaryIntro)
                 appendLine("Points clés : ${keyPoints.joinToString("; ")}")
@@ -731,14 +773,18 @@ class GeminiTutorService {
         gradeLevel: String,
         targetLesson: Lesson,
         weakPoints: List<String>,
-        difficulty: String = "Moyen"
+        difficulty: String = "Moyen",
+        languageToneLevel: String = LanguageToneCatalog.AUTO
     ): Result<GeneratedQuiz> {
         return try {
             val focusGaps = (weakPoints + targetLesson.weakPoints).distinct().take(8)
+            val toneInstruction = ageToneInstruction(childAge, gradeLevel, languageToneLevel)
             val promptText = buildString {
                 appendLine("Tu es un professeur particulier bienveillant qui accompagne $childName ($childAge ans, $gradeLevel).")
                 appendLine("Matière ciblée : ${targetLesson.subject} — Référence : ${targetLesson.title} (${targetLesson.documentType})")
                 appendLine("Difficulté : $difficulty.")
+                appendLine("CONSIGNE OBLIGATOIRE DE LANGAGE ET MATURITÉ (questions, indices, explications) : $toneInstruction")
+                appendLine("RÈGLE QCM MULTI-RÉPONSES : Si une question MCQ ou IMAGE_CHOICE nécessite plusieurs réponses, mets allowMultipleSelection = true et remplis correctIndices.")
                 if (focusGaps.isNotEmpty()) {
                     appendLine("LACUNES À TRAVAILLER EN PRIORITÉ :")
                     focusGaps.forEach { appendLine("- $it") }
@@ -785,7 +831,8 @@ class GeminiTutorService {
         gradeLevel: String,
         missedQuestions: List<MissedQuestionRecord>,
         lessons: List<Lesson>,
-        difficulty: String = "Moyen"
+        difficulty: String = "Moyen",
+        languageToneLevel: String = LanguageToneCatalog.AUTO
     ): Result<GeneratedQuiz> {
         return try {
             val safeDifficulty = SchoolCatalog.normalizeDifficulty(difficulty)
@@ -804,7 +851,8 @@ class GeminiTutorService {
                 appendLine("Tu es un professeur particulier bienveillant qui prépare le GRAND QUIZ DE RÉVISION DU DIMANCHE (14h) pour $childName ($childAge ans, classe de $gradeLevel).")
                 appendLine("Niveau de difficulté : $difficultyLabel.")
                 appendLine(difficultyGuidanceInstruction(safeDifficulty))
-                appendLine("Consigne de ton : ${ageToneInstruction(childAge)}")
+                appendLine("CONSIGNE OBLIGATOIRE DE LANGAGE ET MATURITÉ (questions, indices, explications) : ${ageToneInstruction(childAge, gradeLevel, languageToneLevel)}")
+                appendLine("RÈGLE QCM MULTI-RÉPONSES : Si une question MCQ ou IMAGE_CHOICE nécessite plusieurs réponses, mets allowMultipleSelection = true et remplis correctIndices.")
                 appendLine()
                 appendLine("=== ERREURS ENREGISTRÉES CETTE SEMAINE (AU 1ER ESSAI) ===")
                 missedQuestions.take(20).forEachIndexed { idx, rec ->
@@ -934,12 +982,13 @@ class GeminiTutorService {
         childName: String,
         childAge: Int,
         gradeLevel: String,
-        lessonContext: Lesson?
+        lessonContext: Lesson?,
+        languageToneLevel: String = LanguageToneCatalog.AUTO
     ): Flow<ChatStreamEvent> = flow {
         val systemText = buildString {
             appendLine("Tu es Quizzy IA, un tuteur scolaire bienveillant, patient et encourageant qui répond toujours en français.")
             appendLine("Élève : $childName, $childAge ans, classe de $gradeLevel.")
-            appendLine("Style pédagogique : ${ageToneInstruction(childAge)}")
+            appendLine("Style pédagogique : ${ageToneInstruction(childAge, gradeLevel, languageToneLevel)}")
             when {
                 useWebSearch -> {
                     appendLine("Rôle actif : Assistant documenté avec Recherche Google. Donne des informations vérifiées, à jour, sourcées et pédagogiques.")
@@ -1108,97 +1157,193 @@ class GeminiTutorService {
         }
     }
 
+    internal suspend fun executeImageGenerationWithPersistentRetry(
+        maxRounds: Int = 6,
+        roundDelaysMs: List<Long> = listOf(3_000L, 6_000L, 10_000L, 15_000L, 20_000L, 25_000L),
+        modelSwitchDelayMs: Long = 1_200L,
+        perAttemptTimeoutMs: Long = 60_000L,
+        modelInvokers: List<Pair<String, suspend () -> Bitmap?>>,
+        onStatusUpdate: (String) -> Unit = {}
+    ): Result<Bitmap> {
+        var lastError: Throwable? = null
+        var attemptNumber = 0
+
+        for (round in 1..maxRounds) {
+            var anyRetryableInRound = false
+            for ((modelIdx, pair) in modelInvokers.withIndex()) {
+                val (modelLabel, invoker) = pair
+                attemptNumber++
+                if (attemptNumber > 1) {
+                    val statusMsg = if (round == 1 && modelIdx > 0) {
+                        "Serveur sollicité, passage automatique sur $modelLabel..."
+                    } else {
+                        "Serveur très demandé — nouvelle tentative automatique ($attemptNumber) avec $modelLabel..."
+                    }
+                    onStatusUpdate(statusMsg)
+                }
+
+                try {
+                    val bitmap = withTimeout(perAttemptTimeoutMs) {
+                        invoker()
+                    }
+                    if (bitmap != null) {
+                        return Result.success(bitmap)
+                    } else {
+                        lastError = IllegalStateException("Aucune image n'a été générée par le modèle.")
+                        anyRetryableInRound = true
+                    }
+                } catch (e: CancellationException) {
+                    if (e is TimeoutCancellationException) {
+                        Log.w(TAG, "Image generation attempt #$attemptNumber ($modelLabel) timed out", e)
+                        lastError = e
+                        anyRetryableInRound = true
+                    } else {
+                        throw e
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Image generation attempt #$attemptNumber ($modelLabel) failed: ${e.message}", e)
+                    lastError = e
+                    val retryable = isTransientOrRetryableImageError(e)
+                    if (retryable) {
+                        anyRetryableInRound = true
+                    }
+                }
+
+                // Short pause before switching to the next image model in the same round
+                if (modelIdx < modelInvokers.lastIndex) {
+                    delay(modelSwitchDelayMs)
+                }
+            }
+
+            // If none of the 3 models failed with a retryable error (e.g. hard auth/offline error), stop early
+            if (!anyRetryableInRound) break
+
+            if (round < maxRounds) {
+                val waitMs = roundDelaysMs.getOrElse(round - 1) { roundDelaysMs.lastOrNull() ?: 15_000L }
+                val waitSec = (waitMs / 1000L).coerceAtLeast(1L)
+                onStatusUpdate("File d'attente IA en cours — nouvelle tentative dans ${waitSec}s (ne ferme pas l'écran)...")
+                delay(waitMs)
+            }
+        }
+
+        val finalError = lastError ?: IllegalStateException("Échec de la génération d'image.")
+        Log.e(TAG, "Image generation exhausted all $attemptNumber persistent attempts", finalError)
+        return Result.failure(
+            Exception(
+                FrenchErrorMessages.toFrenchError(
+                    finalError,
+                    "Impossible de générer l'image malgré plusieurs tentatives automatiques. Réessaie dans un moment."
+                ),
+                finalError
+            )
+        )
+    }
+
+    internal fun isTransientOrRetryableImageError(error: Throwable): Boolean {
+        if (error is QuotaExceededException || error is TimeoutCancellationException) return true
+        if (isTransientOrRetryableAiError(error)) return true
+        val chainText = generateSequence(error) { it.cause }
+            .take(8)
+            .mapNotNull { it.message }
+            .joinToString(" ")
+            .lowercase()
+        return chainText.contains("429") ||
+            chainText.contains("quota") ||
+            chainText.contains("rate limit") ||
+            chainText.contains("internal") ||
+            chainText.contains("500") ||
+            chainText.contains("502") ||
+            chainText.contains("504") ||
+            chainText.contains("connection reset") ||
+            chainText.contains("aborted")
+    }
+
+    private fun extractImageBitmap(response: GenerateContentResponse): Bitmap? =
+        response.candidates.firstOrNull()
+            ?.content?.parts?.filterIsInstance<ImagePart>()
+            ?.firstOrNull()?.image
+
     suspend fun generateEducationalImage(
         prompt: String,
         gradeLevel: String,
-        childAge: Int
+        childAge: Int,
+        onStatusUpdate: (String) -> Unit = {}
     ): Result<Bitmap> {
         if (prompt.isBlank()) {
             return Result.failure(IllegalArgumentException("Décris d'abord l'image ou le schéma à créer."))
         }
-        return try {
-            val enrichedPrompt = buildString {
-                append("Crée une illustration pédagogique claire, colorée, soignée et adaptée à un élève de $childAge ans (niveau $gradeLevel) : ")
-                append(prompt.trim())
-            }
-            val response = imageModel.generateContent(enrichedPrompt)
-            val bitmap = response.candidates.firstOrNull()
-                ?.content?.parts?.filterIsInstance<ImagePart>()
-                ?.firstOrNull()?.image
-
-            if (bitmap != null) {
-                Result.success(bitmap)
-            } else {
-                Result.failure(IllegalStateException("Aucune image n'a été générée par le modèle."))
-            }
-        } catch (e: TimeoutCancellationException) {
-            Log.e(TAG, "Image generation timed out", e)
-            Result.failure(Exception("La génération d'image a expiré. Réessaie.", e))
-        } catch (e: QuotaExceededException) {
-            Log.e(TAG, "Image generation quota exceeded", e)
-            Result.failure(Exception("Quota d'images atteint temporairement. Réessaie dans quelques instants.", e))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "Image generation failed", e)
-            Result.failure(
-                Exception(
-                    FrenchErrorMessages.toFrenchError(e, "Échec de la création d'image. Réessaie dans un instant."),
-                    e
-                )
-            )
+        val enrichedPrompt = buildString {
+            append("Crée une illustration pédagogique claire, colorée, soignée et adaptée à un élève de $childAge ans (niveau $gradeLevel) : ")
+            append(prompt.trim())
         }
+        val invokers: List<Pair<String, suspend () -> Bitmap?>> = listOf(
+            "Nano Banana 2.1" to { extractImageBitmap(imageModel.generateContent(enrichedPrompt)) },
+            "Nano Banana Lite" to { extractImageBitmap(imageLiteFallbackModel.generateContent(enrichedPrompt)) },
+            "Nano Banana Pro" to { extractImageBitmap(imageProFallbackModel.generateContent(enrichedPrompt)) }
+        )
+        return executeImageGenerationWithPersistentRetry(
+            modelInvokers = invokers,
+            onStatusUpdate = onStatusUpdate
+        )
     }
 
     suspend fun editEducationalImage(
         inputBitmap: Bitmap,
-        editInstruction: String
+        editInstruction: String,
+        onStatusUpdate: (String) -> Unit = {}
     ): Result<Bitmap> {
         if (editInstruction.isBlank()) {
             return Result.failure(IllegalArgumentException("Indique la modification souhaitée sur l'image."))
         }
-        return try {
-            val scaled = scaleBitmapForAi(inputBitmap, maxDim = 1024)
-            val response = imageModel.generateContent(
-                content {
-                    image(scaled)
-                    text("Modifie cette image pédagogique en français selon l'instruction suivante : ${editInstruction.trim()}")
-                }
-            )
-            val bitmap = response.candidates.firstOrNull()
-                ?.content?.parts?.filterIsInstance<ImagePart>()
-                ?.firstOrNull()?.image
-
-            if (bitmap != null) {
-                Result.success(bitmap)
-            } else {
-                Result.failure(IllegalStateException("Le modèle n'a pas renvoyé d'image modifiée."))
-            }
-        } catch (e: TimeoutCancellationException) {
-            Log.e(TAG, "Image edit timed out", e)
-            Result.failure(Exception("La retouche d'image a expiré. Réessaie dans un instant.", e))
-        } catch (e: QuotaExceededException) {
-            Log.e(TAG, "Image edit quota exceeded", e)
-            Result.failure(Exception("Quota d'images atteint temporairement. Réessaie plus tard.", e))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "Image edit failed", e)
-            Result.failure(
-                Exception(
-                    FrenchErrorMessages.toFrenchError(e, "Échec de la retouche d'image. Réessaie dans un instant."),
-                    e
+        val scaled = scaleBitmapForAi(inputBitmap, maxDim = 1024)
+        val instructionPrompt = "Modifie cette image pédagogique en français selon l'instruction suivante : ${editInstruction.trim()}"
+        val invokers: List<Pair<String, suspend () -> Bitmap?>> = listOf(
+            "Nano Banana 2.1" to {
+                extractImageBitmap(
+                    imageModel.generateContent(
+                        content {
+                            image(scaled)
+                            text(instructionPrompt)
+                        }
+                    )
                 )
-            )
-        }
+            },
+            "Nano Banana Lite" to {
+                extractImageBitmap(
+                    imageLiteFallbackModel.generateContent(
+                        content {
+                            image(scaled)
+                            text(instructionPrompt)
+                        }
+                    )
+                )
+            },
+            "Nano Banana Pro" to {
+                extractImageBitmap(
+                    imageProFallbackModel.generateContent(
+                        content {
+                            image(scaled)
+                            text(instructionPrompt)
+                        }
+                    )
+                )
+            }
+        )
+        return executeImageGenerationWithPersistentRetry(
+            modelInvokers = invokers,
+            onStatusUpdate = onStatusUpdate
+        )
     }
 
-    private fun ageToneInstruction(childAge: Int): String = when {
-        childAge <= 8 -> "Utilise des mots simples, des phrases courtes, des images concrètes du quotidien et un ton joyeux et encourageant."
-        childAge <= 11 -> "Utilise un vocabulaire accessible de primaire/CM, des exemples concrets étape par étape et une structure aérée."
-        childAge <= 14 -> "Utilise un ton clair de collège, structure bien les notions, définitions et méthodes avec un exemple parlant."
-        else -> "Utilise un style rigoureux et limpide de lycée, mettant en évidence concepts clés, définitions exactes et raisonnement."
-    }
+    private fun ageToneInstruction(
+        childAge: Int,
+        gradeLevel: String = "",
+        languageToneLevel: String = LanguageToneCatalog.AUTO
+    ): String = LanguageToneCatalog.buildAiToneInstruction(
+        childAge = childAge,
+        gradeLevel = gradeLevel,
+        toneLevel = languageToneLevel
+    )
 
     internal fun parseQuestions(json: JSONObject): List<QuizQuestion> {
         val arr = json.optJSONArray("questions") ?: return emptyList()
@@ -1309,17 +1454,35 @@ class GeminiTutorService {
                 return h1 to h2
             }
 
+            val rawCorrectIndicesArr = q.optJSONArray("correctIndices")
+            val parsedRawCorrectIndices = if (rawCorrectIndicesArr != null) {
+                (0 until rawCorrectIndicesArr.length())
+                    .mapNotNull { idx -> rawCorrectIndicesArr.optInt(idx, -1).takeIf { it >= 0 } }
+                    .distinct()
+            } else {
+                emptyList()
+            }
+            val explicitMulti = q.optBoolean("allowMultipleSelection", false)
+
             when {
                 isImageChoice -> {
-                    val safeCorrect = q.optInt("correctIndex", 0).coerceIn(0, imageOptions.lastIndex)
-                    val correctImg = imageOptions.getOrNull(safeCorrect)
-                    val forbidden = listOfNotNull(correctImg?.label, correctImg?.visualKey).filter { it.isNotBlank() }
+                    val validMulti = parsedRawCorrectIndices.filter { it in imageOptions.indices }.distinct().sorted()
+                    val safeCorrect = validMulti.firstOrNull()
+                        ?: q.optInt("correctIndex", 0).coerceIn(0, imageOptions.lastIndex)
+                    val finalIndices = if (validMulti.isNotEmpty()) validMulti else listOf(safeCorrect)
+                    val isMulti = explicitMulti || finalIndices.size > 1
+                    val forbidden = finalIndices.flatMap { idx ->
+                        val img = imageOptions.getOrNull(idx)
+                        listOfNotNull(img?.label, img?.visualKey).filter { it.isNotBlank() }
+                    }
                     val (safeHint1, safeHint2) = buildDistinctSafeHints(forbidden, i)
                     list.add(
                         QuizQuestion(
                             prompt = prompt,
                             options = emptyList(),
                             correctIndex = safeCorrect,
+                            correctIndices = finalIndices,
+                            allowMultipleSelection = isMulti,
                             explanation = cleanExplanation,
                             questionType = QuizQuestion.TYPE_IMAGE_CHOICE,
                             sentenceTemplate = "",
@@ -1401,14 +1564,20 @@ class GeminiTutorService {
                     )
                 }
                 opts.size >= 2 -> {
-                    val safeCorrect = q.optInt("correctIndex", 0).coerceIn(0, opts.lastIndex)
-                    val forbidden = listOfNotNull(opts.getOrNull(safeCorrect))
+                    val validMulti = parsedRawCorrectIndices.filter { it in opts.indices }.distinct().sorted()
+                    val safeCorrect = validMulti.firstOrNull()
+                        ?: q.optInt("correctIndex", 0).coerceIn(0, opts.lastIndex)
+                    val finalIndices = if (validMulti.isNotEmpty()) validMulti else listOf(safeCorrect)
+                    val isMulti = explicitMulti || finalIndices.size > 1
+                    val forbidden = finalIndices.mapNotNull { opts.getOrNull(it) }
                     val (safeHint1, safeHint2) = buildDistinctSafeHints(forbidden, i)
                     list.add(
                         QuizQuestion(
                             prompt = prompt,
                             options = opts,
                             correctIndex = safeCorrect,
+                            correctIndices = finalIndices,
+                            allowMultipleSelection = isMulti,
                             explanation = cleanExplanation,
                             questionType = QuizQuestion.TYPE_MCQ,
                             sentenceTemplate = "",
@@ -1426,6 +1595,407 @@ class GeminiTutorService {
             }
         }
         return list
+    }
+
+    // --- Verbatim School Exercise Recreation & Ultra-Fast Per-Answer AI Grading ---
+
+    private val exerciseItemSchema = Schema.obj(
+        properties = mapOf(
+            "numberLabel" to Schema.string(description = "Numéro ou repère exact de la question dans l'exercice (ex: '1', '2a', 'Question 3')"),
+            "prompt" to Schema.string(description = "Énoncé EXACT à l'identique de cette question ou sous-question, fidèle au document fourni"),
+            "inputType" to Schema.enumeration(
+                values = listOf(ExerciseItem.TYPE_TEXT_INPUT, ExerciseItem.TYPE_MCQ),
+                description = "'MCQ' uniquement si le document propose explicitement des choix multiples à cocher/choisir ; 'TEXT_INPUT' si l'élève doit écrire, calculer, compléter ou rédiger une réponse"
+            ),
+            "options" to Schema.array(
+                items = Schema.string(),
+                description = "Pour MCQ uniquement : les propositions exactes du document dans le même ordre. Liste vide [] pour TEXT_INPUT"
+            ),
+            "allowMultipleAnswers" to Schema.boolean(
+                description = "Pour MCQ : true si la question demande ou autorise PLUSIEURS réponses simultanées (ex: 'Coche les bonnes réponses', 'Quels sont...'), false si une seule réponse suffit"
+            ),
+            "expectedAnswerGuide" to Schema.string(description = "Réponse attendue ou éléments clés de correction concis (pour accélérer la correction IA ultérieure)")
+        )
+    )
+
+    private val exerciseExtractSchema = Schema.obj(
+        properties = mapOf(
+            "detectedSubject" to Schema.string(
+                description = "Matière scolaire parmi : Mathématiques, Français, Histoire-Géo, Sciences, Anglais, Physique-Chimie, SVT, Autre"
+            ),
+            "title" to Schema.string(description = "Titre exact ou fidèle de l'exercice scolaire en français"),
+            "generalInstructions" to Schema.string(
+                description = "Consigne générale, texte de référence ou énoncé commun de l'exercice recopié à l'identique (chaîne vide s'il n'y en a pas)"
+            ),
+            "items" to Schema.array(
+                items = exerciseItemSchema,
+                description = "Liste ordonnée et exhaustive de toutes les questions/items de l'exercice recopiées EXACTEMENT à l'identique"
+            )
+        )
+    )
+
+    private val exerciseGradeSchema = Schema.obj(
+        properties = mapOf(
+            "verdict" to Schema.enumeration(
+                values = listOf(
+                    ExerciseItem.VERDICT_CORRECT,
+                    ExerciseItem.VERDICT_PARTIAL,
+                    ExerciseItem.VERDICT_INCORRECT
+                ),
+                description = "Verdict précis : 'CORRECT' (réponse entièrement juste), 'PARTIAL' (bonne idée ou partie juste mais incomplète / erreur mineure), ou 'INCORRECT' (réponse fausse)"
+            ),
+            "explanation" to Schema.string(
+                description = "Explication courte (2 à 3 phrases claires, bienveillantes et précises en français) détaillant pourquoi la réponse est correcte, partiellement correcte ou fausse, avec le détail exact à retenir"
+            )
+        )
+    )
+
+    private val exerciseFinalEvalSchema = Schema.obj(
+        properties = mapOf(
+            "scoreOutOf20" to Schema.double(
+                description = "Note objective et pragmatique sur 20 (entre 0.0 et 20.0, par pas de 0.5) calculée strictement selon les réponses apportées par l'élève (toute question non répondue vaut 0)"
+            ),
+            "overallAssessment" to Schema.string(
+                description = "Bilan détaillé mais concis (3 à 4 phrases maximum) évaluant objectivement le travail de l'élève sur l'ensemble de l'exercice"
+            ),
+            "strengths" to Schema.array(
+                items = Schema.string(),
+                description = "1 à 3 points forts précis et concrets observés dans les réponses de l'élève"
+            ),
+            "improvementAxes" to Schema.array(
+                items = Schema.string(),
+                description = "0 à 3 axes d'amélioration concrets UNIQUEMENT s'il y a des erreurs, oublis ou réponses incomplètes (liste VIDE [] si tout est juste ou quasi parfait)"
+            ),
+            "practicalAdvice" to Schema.string(
+                description = "1 à 2 conseils concrets, pragmatiques et applicables pour progresser ou consolider l'acquis"
+            ),
+            "encouragement" to Schema.string(
+                description = "1 phrase chaleureuse, authentique et bienveillante d'encouragement adaptée à l'âge et au registre de langage demandé"
+            )
+        )
+    )
+
+    private val exerciseExtractModels: List<Pair<String, GenerativeModel>> by lazy {
+        listOf("gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite").map { name ->
+            name to Firebase.ai.generativeModel(
+                modelName = name,
+                generationConfig = generationConfig {
+                    responseMimeType = "application/json"
+                    responseSchema = exerciseExtractSchema
+                    temperature = 0.1f
+                },
+                requestOptions = longRequestOptions
+            )
+        }
+    }
+
+    private val fastGradeRequestOptions: RequestOptions by lazy {
+        RequestOptions(timeoutInMillis = 22_000L)
+    }
+
+    private val exerciseGradeModels: List<Triple<String, Long, GenerativeModel>> by lazy {
+        listOf(
+            "gemini-3.1-flash-lite" to 12_000L,
+            "gemini-3.5-flash-lite" to 15_000L,
+            "gemini-3.8-flash" to 20_000L
+        ).map { (name, timeoutMs) ->
+            Triple(
+                name,
+                timeoutMs,
+                Firebase.ai.generativeModel(
+                    modelName = name,
+                    generationConfig = generationConfig {
+                        responseMimeType = "application/json"
+                        responseSchema = exerciseGradeSchema
+                        temperature = 0.1f
+                        maxOutputTokens = 260
+                    },
+                    requestOptions = fastGradeRequestOptions
+                )
+            )
+        }
+    }
+
+    private val exerciseFinalEvalModels: List<Triple<String, Long, GenerativeModel>> by lazy {
+        listOf(
+            "gemini-3.1-flash-lite" to 14_000L,
+            "gemini-3.5-flash-lite" to 18_000L,
+            "gemini-3.8-flash" to 24_000L
+        ).map { (name, timeoutMs) ->
+            Triple(
+                name,
+                timeoutMs,
+                Firebase.ai.generativeModel(
+                    modelName = name,
+                    generationConfig = generationConfig {
+                        responseMimeType = "application/json"
+                        responseSchema = exerciseFinalEvalSchema
+                        temperature = 0.15f
+                        maxOutputTokens = 650
+                    },
+                    requestOptions = fastGradeRequestOptions
+                )
+            )
+        }
+    }
+
+    /**
+     * Extracts and reproduces a photographed/uploaded uncompleted school exercise EXACTLY
+     * as written (verbatim items, exact TEXT_INPUT vs MCQ format), with multi-model failover
+     * and automatic retry so transient errors are avoided.
+     */
+    suspend fun extractIdenticalExercise(
+        bitmap: Bitmap?,
+        attachments: List<CourseAttachment>,
+        notes: String,
+        selectedSubject: String,
+        childAge: Int,
+        gradeLevel: String
+    ): Result<ExtractedExerciseResult> = withContext(Dispatchers.IO) {
+        val autoDetect = selectedSubject.isBlank() ||
+            selectedSubject.equals(SchoolCatalog.AUTO_SUBJECT, ignoreCase = true)
+        val subjectHint = if (autoDetect) {
+            "Détecte automatiquement la matière exacte parmi : ${SchoolCatalog.subjects.joinToString(", ")}."
+        } else {
+            "Matière choisie par l'élève : $selectedSubject (conserve exactement '$selectedSubject' dans detectedSubject)."
+        }
+
+        val promptText = buildString {
+            appendLine("Tu es un assistant scolaire expert en transcription fidèle d'exercices.")
+            appendLine("Élève : niveau $gradeLevel ($childAge ans).")
+            appendLine(subjectHint)
+            appendLine()
+            appendLine("MISSION ABSOLUE : reproduire l'exercice fourni EXACTEMENT À L'IDENTIQUE pour que l'élève puisse le faire directement sur son téléphone.")
+            appendLine("RÈGLES STRICTES :")
+            appendLine("1. Recopie FIDÈLEMENT le titre, la consigne générale / texte d'appui (generalInstructions), et CHAQUE question / sous-question dans l'ordre exact, avec les mêmes chiffres, mots, phrases et formules.")
+            appendLine("2. N'INVENTE PAS un autre exercice et ne change PAS les nombres ou les phrases du document.")
+            appendLine("3. Pour chaque question (items) :")
+            appendLine("   - Si l'exercice original propose des choix multiples (QCM / cases à cocher / propositions A, B, C...), mets inputType = 'MCQ', recopie exactement chaque proposition dans 'options', et mets allowMultipleAnswers = true dès que la question demande ou admet PLUSIEURS réponses simultanées.")
+            appendLine("   - Si l'exercice original demande d'écrire un mot, un calcul, une phrase, de compléter un trou ou de rédiger, mets inputType = 'TEXT_INPUT', options = [] et allowMultipleAnswers = false.")
+            appendLine("   - Si l'exercice ne comporte qu'une seule grande consigne, crée au moins 1 item fidèle.")
+            appendLine("   - Renseigne 'expectedAnswerGuide' avec la correction attendue courte et exacte (qui servira à corriger l'élève très rapidement).")
+            appendLine("4. Ignore d'éventuelles ratures ou réponses manuscrites déjà commencées : reproduis l'énoncé vierge de l'exercice à faire.")
+            if (notes.isNotBlank()) {
+                appendLine()
+                appendLine("Texte / notes fournis par l'élève :")
+                appendLine(notes.trim().take(12_000))
+            }
+            attachments.forEach { att ->
+                if (!att.extractedText.isNullOrBlank()) {
+                    appendLine()
+                    appendLine("Contenu du fichier « ${att.fileName} » :")
+                    appendLine(att.extractedText.take(18_000))
+                }
+            }
+        }
+
+        val requestContent = content {
+            bitmap?.let { image(scaleBitmapForAi(it, maxDim = 1600)) }
+            attachments.forEach { att ->
+                when {
+                    att.bitmap != null -> image(scaleBitmapForAi(att.bitmap, maxDim = 1600))
+                    att.bytes != null && att.mimeType.equals("application/pdf", ignoreCase = true) -> {
+                        inlineData(att.bytes, "application/pdf")
+                    }
+                }
+            }
+            text(promptText)
+        }
+
+        var lastError: Throwable? = null
+        // 2 passes across all 3 models (up to 6 resilient attempts) to eliminate transient errors
+        for (pass in 0..1) {
+            for ((modelName, model) in exerciseExtractModels) {
+                try {
+                    val response = withTimeout(45_000L) {
+                        model.generateContent(requestContent)
+                    }
+                    val raw = response.text.orEmpty()
+                    if (raw.isBlank()) {
+                        lastError = IllegalStateException("Réponse vide du modèle $modelName")
+                        continue
+                    }
+                    val parsed = parseExtractedExerciseJson(
+                        rawJson = raw,
+                        requestedSubject = selectedSubject,
+                        fallbackNotes = notes
+                    )
+                    if (parsed.items.isNotEmpty()) {
+                        return@withContext Result.success(parsed)
+                    }
+                    lastError = IllegalStateException("Aucune question détectée dans cet exercice.")
+                } catch (e: TimeoutCancellationException) {
+                    Log.w(TAG, "Timeout extracting exercise on $modelName (pass $pass)")
+                    lastError = e
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "Exercise extraction failed on $modelName (pass $pass): ${e.message}")
+                    lastError = e
+                }
+            }
+            if (pass == 0) delay(700L)
+        }
+
+        Result.failure(
+            lastError ?: IllegalStateException("Impossible de reproduire l'exercice pour le moment.")
+        )
+    }
+
+    /**
+     * Ultra-fast, zero-error-resilient per-answer AI grading for a recreated exercise item.
+     * Primary model is gemini-3.1-flash-lite for minimal latency, with automatic failover to
+     * gemini-3.5-flash-lite and gemini-3.8-flash plus a rapid retry pass.
+     */
+    suspend fun gradeExerciseAnswer(
+        subject: String,
+        gradeLevel: String,
+        childAge: Int,
+        generalInstructions: String,
+        item: ExerciseItem,
+        studentAnswer: String,
+        languageToneLevel: String = LanguageToneCatalog.AUTO
+    ): Result<ExerciseGradingResult> = withContext(Dispatchers.IO) {
+        val cleanedAnswer = studentAnswer.trim()
+        if (cleanedAnswer.isEmpty()) {
+            return@withContext Result.failure(IllegalArgumentException("Écris ou sélectionne une réponse avant de valider."))
+        }
+
+        val toneInstruction = ageToneInstruction(childAge, gradeLevel, languageToneLevel)
+        val prompt = buildString {
+            appendLine("Corrige rapidement et avec bienveillance la réponse d'un élève de $gradeLevel ($childAge ans) en $subject.")
+            appendLine("CONSIGNE OBLIGATOIRE DE LANGAGE : $toneInstruction")
+            if (generalInstructions.isNotBlank()) {
+                appendLine("Consigne générale : ${generalInstructions.take(600)}")
+            }
+            appendLine("Question ${item.numberLabel} : ${item.prompt}")
+            if (item.isMcq) {
+                appendLine("Choix QCM : ${item.options.joinToString(" | ")}")
+                if (item.isMultiSelectMcq) {
+                    appendLine("Note : ce QCM autorise plusieurs réponses (séparées par ' ; ').")
+                }
+            }
+            if (item.expectedAnswerGuide.isNotBlank()) {
+                appendLine("Repère de correction : ${item.expectedAnswerGuide.take(400)}")
+            }
+            appendLine("Réponse de l'élève : \"$cleanedAnswer\"")
+            appendLine()
+            appendLine("Règles :")
+            appendLine("- verdict = 'CORRECT' si la réponse est juste (tolère majuscules/accents mineurs si l'orthographe n'est pas l'objet de la question).")
+            appendLine("- verdict = 'PARTIAL' si le raisonnement ou une partie de la réponse est juste mais qu'il manque un élément, un choix parmi plusieurs attendus, une unité ou une précision.")
+            appendLine("- verdict = 'INCORRECT' si la réponse est fausse.")
+            appendLine("- explanation = 2 à 3 phrases courtes, claires et pédagogiques en français expliquant exactement le détail de la réponse, en respectant strictement le niveau de langage demandé.")
+        }
+
+        var lastError: Throwable? = null
+        for (pass in 0..1) {
+            for ((modelName, timeoutMs, model) in exerciseGradeModels) {
+                try {
+                    val response = withTimeout(timeoutMs) {
+                        model.generateContent(prompt)
+                    }
+                    val raw = response.text.orEmpty()
+                    if (raw.isBlank()) {
+                        lastError = IllegalStateException("Réponse vide ($modelName)")
+                        continue
+                    }
+                    return@withContext Result.success(parseExerciseGradeJson(raw))
+                } catch (e: TimeoutCancellationException) {
+                    Log.w(TAG, "Fast grading timeout on $modelName (pass $pass)")
+                    lastError = e
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "Fast grading error on $modelName (pass $pass): ${e.message}")
+                    lastError = e
+                }
+            }
+            if (pass == 0) delay(500L)
+        }
+
+        Result.failure(
+            lastError ?: IllegalStateException("La correction IA n'a pas pu aboutir. Réessaie.")
+        )
+    }
+
+    /**
+     * Ultra-fast objective final evaluation on /20 for a completed exercise sheet.
+     * Pragmatic, benevolent, detailed yet concise, and strictly calibrated to the child's
+     * age or parent-configured language maturity level.
+     */
+    suspend fun evaluateCompleteExercise(
+        childName: String,
+        childAge: Int,
+        gradeLevel: String,
+        sheet: ExerciseSheet,
+        languageToneLevel: String = LanguageToneCatalog.AUTO
+    ): Result<ExerciseFinalEvaluation> = withContext(Dispatchers.IO) {
+        if (sheet.items.isEmpty()) {
+            return@withContext Result.failure(IllegalArgumentException("Cet exercice ne contient aucune question."))
+        }
+        val toneInstruction = ageToneInstruction(childAge, gradeLevel, languageToneLevel)
+        val prompt = buildString {
+            appendLine("Tu es un correcteur scolaire pragmatique, objectif et bienveillant.")
+            appendLine("Évalue l'exercice complet de $childName ($childAge ans, $gradeLevel) en ${sheet.subject} et attribue une NOTE OBJECTIVE SUR 20.")
+            appendLine("CONSIGNE OBLIGATOIRE DE LANGAGE ET MATURITÉ : $toneInstruction")
+            appendLine("Titre de l'exercice : ${sheet.title}")
+            if (sheet.generalInstructions.isNotBlank()) {
+                appendLine("Consigne générale : ${sheet.generalInstructions.take(600)}")
+            }
+            appendLine()
+            appendLine("=== QUESTIONS ET RÉPONSES DE L'ÉLÈVE ===")
+            sheet.items.forEachIndexed { idx, item ->
+                val ans = item.studentAnswer.trim().ifBlank { "(Aucune réponse fournie)" }
+                val guide = item.expectedAnswerGuide.trim().take(260)
+                val prevVerdict = item.verdict.ifBlank { "NON_VERIFIÉ" }
+                appendLine("Q${item.numberLabel.ifBlank { "${idx + 1}" }} : ${item.prompt.take(360)}")
+                if (item.isMcq) {
+                    appendLine("  Options : ${item.options.joinToString(" | ")}")
+                }
+                if (guide.isNotBlank()) {
+                    appendLine("  Attendu : $guide")
+                }
+                appendLine("  Réponse élève : $ans (statut intermédiaire : $prevVerdict)")
+            }
+            appendLine()
+            appendLine("RÈGLES STRICTES DE NOTATION ET DE RETOUR :")
+            appendLine("1. scoreOutOf20 : Sois PRAGMATIQUE et OBJECTIF (pas de note gonflée artificiellement). Base la note sur le ratio réel de réponses justes, partielles et fausses/manquantes (pas de 0.5 point, entre 0.0 et 20.0). Une question sans réponse vaut 0.")
+            appendLine("2. overallAssessment : 3 à 4 phrases détaillées mais concises résumant objectivement les réussites et les points d'attention sans longueur excessive.")
+            appendLine("3. strengths : 1 à 3 points forts réels observés dans la copie.")
+            appendLine("4. improvementAxes : UNIQUEMENT si nécessaire (erreurs, oublis ou réponses partielles). Si l'exercice est entièrement réussi (ex: ≥ 19/20 sans erreur), renvoie une liste VIDE [].")
+            appendLine("5. practicalAdvice : 1 à 2 conseils concrets, utiles et applicables.")
+            appendLine("6. encouragement : 1 phrase sincère et motivante respectant le niveau de maturité/langage demandé.")
+        }
+
+        var lastError: Throwable? = null
+        for (pass in 0..1) {
+            for ((modelName, timeoutMs, model) in exerciseFinalEvalModels) {
+                try {
+                    val response = withTimeout(timeoutMs) {
+                        model.generateContent(prompt)
+                    }
+                    val raw = response.text.orEmpty()
+                    if (raw.isBlank()) {
+                        lastError = IllegalStateException("Réponse vide ($modelName)")
+                        continue
+                    }
+                    return@withContext Result.success(parseExerciseFinalEvaluationJson(raw))
+                } catch (e: TimeoutCancellationException) {
+                    Log.w(TAG, "Final exercise evaluation timeout on $modelName (pass $pass)")
+                    lastError = e
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(TAG, "Final exercise evaluation error on $modelName (pass $pass): ${e.message}")
+                    lastError = e
+                }
+            }
+            if (pass == 0) delay(450L)
+        }
+
+        Result.failure(
+            lastError ?: IllegalStateException("La notation finale sur 20 n'a pas pu aboutir. Réessaie.")
+        )
     }
 
     private fun scaleBitmapForAi(bitmap: Bitmap, maxDim: Int = 1400): Bitmap {
@@ -1639,6 +2209,143 @@ class GeminiTutorService {
             } else {
                 trimmed
             }
+        }
+
+        internal fun parseExtractedExerciseJson(
+            rawJson: String,
+            requestedSubject: String,
+            fallbackNotes: String = ""
+        ): ExtractedExerciseResult {
+            val cleaned = stripJsonFences(rawJson)
+            val root = JSONObject(cleaned)
+            val autoRequested = requestedSubject.isBlank() ||
+                requestedSubject.equals(SchoolCatalog.AUTO_SUBJECT, ignoreCase = true)
+            val rawSubject = root.optString("detectedSubject").trim()
+            val resolvedSubject = if (!autoRequested && requestedSubject in SchoolCatalog.subjects) {
+                requestedSubject
+            } else {
+                SchoolCatalog.subjects.firstOrNull { it.equals(rawSubject, ignoreCase = true) }
+                    ?: rawSubject.ifBlank { "Autre" }
+            }
+            val title = root.optString("title").trim().ifBlank { "Exercice de $resolvedSubject" }
+            val instructions = root.optString("generalInstructions").trim()
+            val itemsArray = root.optJSONArray("items")
+            val parsedItems = mutableListOf<ExerciseItem>()
+            if (itemsArray != null) {
+                for (i in 0 until itemsArray.length()) {
+                    val obj = itemsArray.optJSONObject(i) ?: continue
+                    val prompt = obj.optString("prompt").trim()
+                    if (prompt.isBlank()) continue
+                    val numLabel = obj.optString("numberLabel").trim().ifBlank { "${parsedItems.size + 1}" }
+                    val optsArr = obj.optJSONArray("options")
+                    val opts = mutableListOf<String>()
+                    if (optsArr != null) {
+                        for (j in 0 until optsArr.length()) {
+                            val opt = optsArr.optString(j).trim()
+                            if (opt.isNotBlank()) opts.add(opt)
+                        }
+                    }
+                    val rawType = obj.optString("inputType", ExerciseItem.TYPE_TEXT_INPUT).trim()
+                    val safeType = if (rawType.equals(ExerciseItem.TYPE_MCQ, ignoreCase = true) && opts.size >= 2) {
+                        ExerciseItem.TYPE_MCQ
+                    } else {
+                        ExerciseItem.TYPE_TEXT_INPUT
+                    }
+                    val expectedGuide = obj.optString("expectedAnswerGuide").trim()
+                    val allowMulti = safeType == ExerciseItem.TYPE_MCQ && (
+                        obj.optBoolean("allowMultipleAnswers", false) ||
+                            ExerciseItem.detectsMultipleAnswers(
+                                prompt = prompt,
+                                generalInstructions = instructions,
+                                expectedAnswerGuide = expectedGuide,
+                                options = opts
+                            )
+                        )
+                    parsedItems.add(
+                        ExerciseItem(
+                            id = "ex_item_${i + 1}",
+                            numberLabel = numLabel,
+                            prompt = prompt,
+                            inputType = safeType,
+                            options = if (safeType == ExerciseItem.TYPE_MCQ) opts else emptyList(),
+                            allowMultipleAnswers = allowMulti,
+                            expectedAnswerGuide = expectedGuide
+                        )
+                    )
+                }
+            }
+            if (parsedItems.isEmpty() && (instructions.isNotBlank() || fallbackNotes.isNotBlank())) {
+                parsedItems.add(
+                    ExerciseItem(
+                        id = "ex_item_1",
+                        numberLabel = "1",
+                        prompt = instructions.ifBlank { fallbackNotes.trim() },
+                        inputType = ExerciseItem.TYPE_TEXT_INPUT
+                    )
+                )
+            }
+            return ExtractedExerciseResult(
+                detectedSubject = resolvedSubject,
+                title = title,
+                generalInstructions = instructions,
+                items = parsedItems
+            )
+        }
+
+        internal fun parseExerciseGradeJson(rawJson: String): ExerciseGradingResult {
+            val cleaned = stripJsonFences(rawJson)
+            val root = JSONObject(cleaned)
+            val verdict = ExerciseItem.normalizeVerdict(root.optString("verdict", ExerciseItem.VERDICT_INCORRECT))
+            val explanation = root.optString("explanation").trim().ifBlank {
+                when (verdict) {
+                    ExerciseItem.VERDICT_CORRECT -> "Ta réponse correspond bien à ce qui est demandé dans l'exercice."
+                    ExerciseItem.VERDICT_PARTIAL -> "Tu es sur la bonne piste, il manque encore une petite précision pour que ce soit complet."
+                    else -> "Ce n'est pas encore la bonne réponse : relis bien l'énoncé et essaie de reprendre étape par étape."
+                }
+            }
+            return ExerciseGradingResult(verdict = verdict, explanation = explanation)
+        }
+
+        internal fun parseExerciseFinalEvaluationJson(rawJson: String): ExerciseFinalEvaluation {
+            val cleaned = stripJsonFences(rawJson)
+            val root = JSONObject(cleaned)
+            val rawScore = root.optDouble("scoreOutOf20", 0.0)
+            val clampedScore = ExerciseFinalEvaluation.clampScore(rawScore)
+            val overall = root.optString("overallAssessment").trim().ifBlank {
+                "Voici l'évaluation globale de ton exercice basée sur l'ensemble de tes réponses."
+            }
+            val strengthsArr = root.optJSONArray("strengths")
+            val strengths = buildList {
+                if (strengthsArr != null) {
+                    for (i in 0 until strengthsArr.length().coerceAtMost(4)) {
+                        val s = strengthsArr.optString(i).trim()
+                        if (s.isNotEmpty()) add(s)
+                    }
+                }
+            }
+            val axesArr = root.optJSONArray("improvementAxes")
+            val axes = buildList {
+                if (axesArr != null) {
+                    for (i in 0 until axesArr.length().coerceAtMost(4)) {
+                        val s = axesArr.optString(i).trim()
+                        if (s.isNotEmpty()) add(s)
+                    }
+                }
+            }
+            val advice = root.optString("practicalAdvice").trim().ifBlank {
+                "Relis attentivement chaque consigne et vérifie tes calculs ou accords avant de valider."
+            }
+            val encouragement = root.optString("encouragement").trim().ifBlank {
+                "Continue sur cette lancée, chaque exercice terminé te fait progresser !"
+            }
+            return ExerciseFinalEvaluation(
+                scoreOutOf20 = clampedScore,
+                overallAssessment = overall,
+                strengths = strengths,
+                improvementAxes = axes,
+                practicalAdvice = advice,
+                encouragement = encouragement
+            )
         }
 
         internal fun normalizeChatHistoryForSdk(history: List<ChatTurnInput>): List<ChatTurnInput> {

@@ -40,6 +40,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.LocalFireDepartment
@@ -75,6 +77,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.model.GamificationCatalog
+import com.example.model.LanguageToneCatalog
 import com.example.model.MissedQuestionRecord
 import com.example.model.Quiz
 import com.example.model.QuizAnswerEvaluator
@@ -88,6 +91,9 @@ import com.example.ui.components.ImageChoiceMiniGame
 import com.example.ui.components.InteractiveFillBlankArea
 import com.example.ui.components.ModernCard
 import com.example.ui.components.QuizQuestionIllustrationCard
+import com.example.ui.components.QuizResultFeedbackAnimation
+import com.example.ui.components.QuizzyAnimatedMascot
+import com.example.ui.components.QuizzyMascotMood
 import com.example.ui.components.SubjectBadge
 import com.example.ui.components.SuccessRateGauge
 import com.example.ui.components.TrophySuccessIllustration
@@ -109,6 +115,8 @@ fun QuizPlayerScreen(
     childPreviousXp: Long = 0L,
     childExistingBadges: List<String> = emptyList(),
     childQuizzesTaken: Long = 0L,
+    childAge: Int = 10,
+    childLanguageToneLevel: String = LanguageToneCatalog.AUTO,
     onBack: () -> Unit,
     onQuizCompleted: (
         score: Int,
@@ -148,7 +156,13 @@ fun QuizPlayerScreen(
     val startQuizzesTaken = remember(quiz.id, attemptKey) { childQuizzesTaken }
 
     var currentIndex by remember(quiz.id, attemptKey) { mutableIntStateOf(0) }
+    var isRemediationPhase by remember(quiz.id, attemptKey) { mutableStateOf(false) }
+    var remediationQueue by remember(quiz.id, attemptKey) { mutableStateOf<List<Int>>(emptyList()) }
+    var remediationPosition by remember(quiz.id, attemptKey) { mutableIntStateOf(0) }
+    var failedOutOnMainPass by remember(quiz.id, attemptKey) { mutableStateOf(false) }
+
     var selectedOption by remember(quiz.id, attemptKey) { mutableStateOf<Int?>(null) }
+    var selectedOptions by remember(quiz.id, attemptKey) { mutableStateOf<Set<Int>>(emptySet()) }
     var triedWrongOptions by remember(quiz.id, attemptKey) { mutableStateOf<Set<Int>>(emptySet()) }
     var textAnswer by remember(quiz.id, attemptKey) { mutableStateOf("") }
     var wrongAttemptsOnQuestion by remember(quiz.id, attemptKey) { mutableIntStateOf(0) }
@@ -168,6 +182,7 @@ fun QuizPlayerScreen(
     val weakSkills = remember(quiz.id, attemptKey) { mutableStateListOf<String>() }
     val reviewItems = remember(quiz.id, attemptKey) { mutableStateListOf<ReviewPointItem>() }
     val missedQuestionRecords = remember(quiz.id, attemptKey) { mutableStateListOf<MissedQuestionRecord>() }
+    val remediationQuestionIndices = remember(quiz.id, attemptKey) { mutableStateListOf<Int>() }
 
     val streakScale by animateFloatAsState(
         targetValue = if (currentStreak > 0) 1f else 0.85f,
@@ -264,7 +279,10 @@ fun QuizPlayerScreen(
                             .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        TrophySuccessIllustration(size = 86.dp)
+                        QuizzyAnimatedMascot(
+                            mood = if (pct >= 60) QuizzyMascotMood.VICTORY else QuizzyMascotMood.ENCOURAGE,
+                            size = 118.dp
+                        )
 
                         Spacer(Modifier.height(10.dp))
 
@@ -639,65 +657,125 @@ fun QuizPlayerScreen(
                 Spacer(Modifier.height(10.dp))
             }
         } else {
-            val q = questions[currentIndex]
-            val isQuestionResolved = isQuestionSolved || wasSkipped
+            val activeQuestionIndex = if (isRemediationPhase) {
+                remediationQueue.getOrElse(remediationPosition) { 0 }.coerceIn(0, questions.lastIndex)
+            } else {
+                currentIndex.coerceIn(0, questions.lastIndex)
+            }
+            val q = questions[activeQuestionIndex]
+            val questionRoundKey = if (isRemediationPhase) "rem_${remediationPosition}_$activeQuestionIndex" else "main_$activeQuestionIndex"
+            val isQuestionResolved = isQuestionSolved || wasSkipped || failedOutOnMainPass
             val skillLabel = q.skillTag.ifBlank { q.prompt.take(70) }
-            var dragMatchAssignments by remember(quiz.id, attemptKey, currentIndex) {
+            var dragMatchAssignments by remember(quiz.id, attemptKey, questionRoundKey) {
                 mutableStateOf<Map<Int, String>>(emptyMap())
             }
-            var dragOrderSlots by remember(quiz.id, attemptKey, currentIndex) {
+            var dragOrderSlots by remember(quiz.id, attemptKey, questionRoundKey) {
                 mutableStateOf<List<String?>>(List(q.orderedItems.size) { null })
             }
-            val shuffledMatchTargets = remember(quiz.id, attemptKey, currentIndex, q) {
+            val shuffledMatchTargets = remember(quiz.id, attemptKey, questionRoundKey, q) {
                 QuizAnswerEvaluator.shuffledDeterministically(
                     items = q.matchingPairs.map { it.right },
-                    seed = currentIndex + attemptKey + 17
+                    seed = activeQuestionIndex + attemptKey + (if (isRemediationPhase) 97 else 17)
                 )
             }
-            val shuffledOrderBank = remember(quiz.id, attemptKey, currentIndex, q) {
+            val shuffledOrderBank = remember(quiz.id, attemptKey, questionRoundKey, q) {
                 QuizAnswerEvaluator.shuffledDeterministically(
                     items = q.orderedItems,
-                    seed = currentIndex + attemptKey + 41
+                    seed = activeQuestionIndex + attemptKey + (if (isRemediationPhase) 131 else 41)
                 )
             }
-            val hint1 = remember(currentIndex, q) {
+            val hint1 = remember(activeQuestionIndex, q) {
                 QuizFeedbackHelper.safeGuidingHint(
                     rawHint = q.guidingHint,
                     forbiddenAnswers = q.forbiddenAnswersForHints,
-                    questionIndex = currentIndex,
+                    questionIndex = activeQuestionIndex,
                     isSecondAttempt = false
                 )
             }
-            val hint2 = remember(currentIndex, q, hint1) {
+            val hint2 = remember(activeQuestionIndex, q, hint1) {
                 val candidate = QuizFeedbackHelper.safeGuidingHint(
                     rawHint = q.secondHint,
                     forbiddenAnswers = q.forbiddenAnswersForHints,
-                    questionIndex = currentIndex,
+                    questionIndex = activeQuestionIndex,
                     isSecondAttempt = true
                 )
                 if (candidate.equals(hint1, ignoreCase = true)) {
                     QuizFeedbackHelper.safeGuidingHint(
                         rawHint = "",
                         forbiddenAnswers = q.forbiddenAnswersForHints,
-                        questionIndex = currentIndex + 1,
+                        questionIndex = activeQuestionIndex + 1,
                         isSecondAttempt = true
                     )
                 } else {
                     candidate
                 }
             }
-            val nextTryPotentialXp = GamificationCatalog.questionXpForAttempt(
-                difficulty = quiz.difficulty,
-                wrongAttemptsBeforeSolve = wrongAttemptsOnQuestion,
-                isReplay = isReplayAttempt
-            )
+            val nextTryPotentialXp = if (isRemediationPhase) {
+                0
+            } else {
+                GamificationCatalog.questionXpForAttempt(
+                    difficulty = quiz.difficulty,
+                    wrongAttemptsBeforeSolve = wrongAttemptsOnQuestion,
+                    isReplay = isReplayAttempt
+                )
+            }
+
+            fun resetPerQuestionState() {
+                selectedOption = null
+                selectedOptions = emptySet()
+                triedWrongOptions = emptySet()
+                textAnswer = ""
+                wrongAttemptsOnQuestion = 0
+                isQuestionSolved = false
+                wasSkipped = false
+                failedOutOnMainPass = false
+                hadStreakBeforeMiss = false
+            }
+
+            fun finishQuizAndReport() {
+                val finalEarnedXp = if (isReplayAttempt) 0L else liveXp.toLong().coerceAtLeast(0L)
+                completedInSession = true
+                isFinished = true
+                val distinctMastered = masteredSkills.distinct()
+                val distinctWeak = weakSkills.distinct()
+                val missedList = missedQuestionRecords.toList()
+                onQuizCompleted(
+                    correctCount,
+                    questions.size,
+                    maxStreak,
+                    distinctMastered,
+                    distinctWeak
+                )
+                onQuizCompletedWithXp?.invoke(
+                    correctCount,
+                    questions.size,
+                    maxStreak,
+                    distinctMastered,
+                    distinctWeak,
+                    finalEarnedXp
+                )
+                onQuizCompletedFull?.invoke(
+                    correctCount,
+                    questions.size,
+                    maxStreak,
+                    distinctMastered,
+                    distinctWeak,
+                    finalEarnedXp,
+                    missedList
+                )
+            }
 
             fun validateCurrentAnswer() {
                 if (isQuestionResolved) return
                 val isCorrect = when {
                     q.isImageChoice -> {
-                        val picked = selectedOption ?: return
-                        picked == q.correctIndex
+                        if (q.isMultiSelect) {
+                            if (selectedOptions.isEmpty()) return
+                            selectedOptions == q.effectiveCorrectIndices
+                        } else {
+                            val picked = selectedOption ?: return
+                            picked == q.correctIndex
+                        }
                     }
                     q.isDragMatch -> {
                         if (dragMatchAssignments.size < q.matchingPairs.size) return
@@ -712,34 +790,44 @@ fun QuizPlayerScreen(
                         QuizAnswerEvaluator.matchesFillBlank(textAnswer, q.acceptedAnswers)
                     }
                     else -> {
-                        val picked = selectedOption ?: return
-                        picked == q.correctIndex
+                        if (q.isMultiSelect) {
+                            if (selectedOptions.isEmpty()) return
+                            selectedOptions == q.effectiveCorrectIndices
+                        } else {
+                            val picked = selectedOption ?: return
+                            picked == q.correctIndex
+                        }
                     }
                 }
 
                 if (isCorrect) {
                     isQuestionSolved = true
                     hadStreakBeforeMiss = false
-                    val gained = GamificationCatalog.questionXpForAttempt(
-                        difficulty = quiz.difficulty,
-                        wrongAttemptsBeforeSolve = wrongAttemptsOnQuestion,
-                        isReplay = isReplayAttempt
-                    )
-                    liveXp += gained
-                    lastQuestionXp = gained
-                    if (wrongAttemptsOnQuestion == 0) {
-                        correctCount += 1
-                        currentStreak += 1
-                        if (currentStreak > maxStreak) {
-                            maxStreak = currentStreak
-                        }
-                        masteredPrompts.add(q.prompt)
-                        if (skillLabel.isNotBlank() && skillLabel !in masteredSkills) {
-                            masteredSkills.add(skillLabel)
+                    if (isRemediationPhase) {
+                        // Remediation round awards strictly 0 XP and never alters 1st-try accuracy score
+                        lastQuestionXp = 0
+                    } else {
+                        val gained = GamificationCatalog.questionXpForAttempt(
+                            difficulty = quiz.difficulty,
+                            wrongAttemptsBeforeSolve = wrongAttemptsOnQuestion,
+                            isReplay = isReplayAttempt
+                        )
+                        liveXp += gained
+                        lastQuestionXp = gained
+                        if (wrongAttemptsOnQuestion == 0) {
+                            correctCount += 1
+                            currentStreak += 1
+                            if (currentStreak > maxStreak) {
+                                maxStreak = currentStreak
+                            }
+                            masteredPrompts.add(q.prompt)
+                            if (skillLabel.isNotBlank() && skillLabel !in masteredSkills) {
+                                masteredSkills.add(skillLabel)
+                            }
                         }
                     }
                 } else {
-                    if (wrongAttemptsOnQuestion == 0) {
+                    if (!isRemediationPhase && wrongAttemptsOnQuestion == 0) {
                         hadStreakBeforeMiss = currentStreak > 0
                         currentStreak = 0
                         lastQuestionXp = 0
@@ -768,56 +856,44 @@ fun QuizPlayerScreen(
                         )
                     }
                     wrongAttemptsOnQuestion += 1
-                    if (q.isImageChoice || (!q.isFillBlank && !q.isDragMatch && !q.isDragOrder)) {
+                    if (!q.isMultiSelect && (q.isImageChoice || (!q.isFillBlank && !q.isDragMatch && !q.isDragOrder))) {
                         selectedOption?.let { wrongIdx ->
                             triedWrongOptions = triedWrongOptions + wrongIdx
                         }
                         selectedOption = null
                     }
+                    // Main pass rule: after 2 consecutive errors on a question, lock retries and move on;
+                    // the question will be re-asked at the end of the quiz (0 XP, unlimited tries).
+                    if (!isRemediationPhase && wrongAttemptsOnQuestion >= 2) {
+                        failedOutOnMainPass = true
+                        if (activeQuestionIndex !in remediationQuestionIndices) {
+                            remediationQuestionIndices.add(activeQuestionIndex)
+                        }
+                    }
                 }
             }
 
             fun moveToNextQuestion() {
-                if (currentIndex < questions.lastIndex) {
-                    currentIndex += 1
-                    selectedOption = null
-                    triedWrongOptions = emptySet()
-                    textAnswer = ""
-                    wrongAttemptsOnQuestion = 0
-                    isQuestionSolved = false
-                    wasSkipped = false
-                    hadStreakBeforeMiss = false
+                if (isRemediationPhase) {
+                    if (remediationPosition < remediationQueue.lastIndex) {
+                        remediationPosition += 1
+                        resetPerQuestionState()
+                    } else {
+                        finishQuizAndReport()
+                    }
                 } else {
-                    val finalEarnedXp = if (isReplayAttempt) 0L else liveXp.toLong().coerceAtLeast(0L)
-                    completedInSession = true
-                    isFinished = true
-                    val distinctMastered = masteredSkills.distinct()
-                    val distinctWeak = weakSkills.distinct()
-                    val missedList = missedQuestionRecords.toList()
-                    onQuizCompleted(
-                        correctCount,
-                        questions.size,
-                        maxStreak,
-                        distinctMastered,
-                        distinctWeak
-                    )
-                    onQuizCompletedWithXp?.invoke(
-                        correctCount,
-                        questions.size,
-                        maxStreak,
-                        distinctMastered,
-                        distinctWeak,
-                        finalEarnedXp
-                    )
-                    onQuizCompletedFull?.invoke(
-                        correctCount,
-                        questions.size,
-                        maxStreak,
-                        distinctMastered,
-                        distinctWeak,
-                        finalEarnedXp,
-                        missedList
-                    )
+                    if (currentIndex < questions.lastIndex) {
+                        currentIndex += 1
+                        resetPerQuestionState()
+                    } else if (remediationQuestionIndices.isNotEmpty()) {
+                        // Enter end-of-quiz remediation round for all missed/failed questions!
+                        isRemediationPhase = true
+                        remediationQueue = remediationQuestionIndices.toList()
+                        remediationPosition = 0
+                        resetPerQuestionState()
+                    } else {
+                        finishQuizAndReport()
+                    }
                 }
             }
 
@@ -857,14 +933,24 @@ fun QuizPlayerScreen(
                     }
 
                     Surface(
-                        color = qColors.pastelMint,
+                        color = if (isRemediationPhase) qColors.pastelPeach else qColors.pastelMint,
                         shape = RoundedCornerShape(50),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+                        border = BorderStroke(
+                            1.dp,
+                            (if (isRemediationPhase) qColors.coralInk else MaterialTheme.colorScheme.primary).copy(alpha = 0.30f)
+                        ),
+                        modifier = Modifier.testTag(
+                            if (isRemediationPhase) "quiz_remediation_progress_pill" else "quiz_question_progress_pill"
+                        )
                     ) {
                         Text(
-                            text = "Question ${currentIndex + 1} sur ${questions.size}",
+                            text = if (isRemediationPhase) {
+                                "Rattrapage ${remediationPosition + 1} sur ${remediationQueue.size}"
+                            } else {
+                                "Question ${currentIndex + 1} sur ${questions.size}"
+                            },
                             style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = if (isRemediationPhase) qColors.coralInk else MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.ExtraBold,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
@@ -873,14 +959,51 @@ fun QuizPlayerScreen(
 
                 Spacer(Modifier.height(14.dp))
                 LinearProgressIndicator(
-                    progress = { (currentIndex + 1).toFloat() / questions.size.toFloat() },
-                    color = MaterialTheme.colorScheme.primary,
+                    progress = {
+                        if (isRemediationPhase) {
+                            (remediationPosition + 1).toFloat() / remediationQueue.size.coerceAtLeast(1).toFloat()
+                        } else {
+                            (currentIndex + 1).toFloat() / questions.size.toFloat()
+                        }
+                    },
+                    color = if (isRemediationPhase) qColors.coralInk else MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(10.dp)
                         .clip(RoundedCornerShape(50))
                 )
+
+                if (isRemediationPhase) {
+                    Spacer(Modifier.height(10.dp))
+                    Surface(
+                        color = qColors.pastelYellow,
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, qColors.warningInk.copy(alpha = 0.38f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("quiz_remediation_banner")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Refresh,
+                                contentDescription = null,
+                                tint = qColors.warningInk,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Rattrapage de tes erreurs • 0 point • Essais illimités jusqu'à réussir !",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = qColors.headingInk,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+                }
 
                 Spacer(Modifier.height(12.dp))
                 FlowRow(
@@ -920,7 +1043,32 @@ fun QuizPlayerScreen(
                         }
                     }
 
-                    if (isReplayAttempt) {
+                    if (isRemediationPhase) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(50),
+                            modifier = Modifier.testTag("quiz_remediation_zero_xp_pill")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Refresh,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Rattrapage • 0 XP",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    } else if (isReplayAttempt) {
                         Surface(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = RoundedCornerShape(50),
@@ -1057,7 +1205,20 @@ fun QuizPlayerScreen(
                             correctIndex = q.correctIndex,
                             isQuestionResolved = isQuestionResolved,
                             isQuestionSolved = isQuestionSolved,
-                            onSelect = { idx -> selectedOption = idx }
+                            onSelect = { idx ->
+                                if (q.isMultiSelect) {
+                                    selectedOptions = if (idx in selectedOptions) {
+                                        selectedOptions - idx
+                                    } else {
+                                        selectedOptions + idx
+                                    }
+                                } else {
+                                    selectedOption = idx
+                                }
+                            },
+                            isMultiSelect = q.isMultiSelect,
+                            selectedIndices = selectedOptions,
+                            correctIndices = q.effectiveCorrectIndices
                         )
                     }
                     q.isDragMatch -> {
@@ -1141,10 +1302,40 @@ fun QuizPlayerScreen(
                         )
                     }
                     else -> {
+                    if (q.isMultiSelect) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = qColors.pastelYellow,
+                            border = BorderStroke(1.dp, qColors.warningInk.copy(alpha = 0.35f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                                .testTag("quiz_multi_select_badge")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.CheckBox,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = "Plusieurs réponses attendues — coche toutes les bonnes propositions",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = qColors.headingInk
+                                )
+                            }
+                        }
+                    }
                     q.options.forEachIndexed { idx, optionText ->
-                        val isSelected = selectedOption == idx
-                        val wasTriedWrong = idx in triedWrongOptions
-                        val showAsCorrect = isQuestionSolved && idx == q.correctIndex
+                        val isSelected = if (q.isMultiSelect) idx in selectedOptions else selectedOption == idx
+                        val wasTriedWrong = !q.isMultiSelect && idx in triedWrongOptions
+                        val showAsCorrect = isQuestionSolved && idx in q.effectiveCorrectIndices
 
                         val bgColor = when {
                             showAsCorrect -> qColors.pastelMint
@@ -1160,7 +1351,17 @@ fun QuizPlayerScreen(
                         }
 
                         Surface(
-                            onClick = { selectedOption = idx },
+                            onClick = {
+                                if (q.isMultiSelect) {
+                                    selectedOptions = if (idx in selectedOptions) {
+                                        selectedOptions - idx
+                                    } else {
+                                        selectedOptions + idx
+                                    }
+                                } else {
+                                    selectedOption = idx
+                                }
+                            },
                             enabled = !isQuestionResolved && !wasTriedWrong,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1184,7 +1385,7 @@ fun QuizPlayerScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(34.dp)
-                                        .clip(CircleShape)
+                                        .clip(if (q.isMultiSelect) RoundedCornerShape(10.dp) else CircleShape)
                                         .background(
                                             when {
                                                 showAsCorrect -> qColors.successInk
@@ -1226,6 +1427,12 @@ fun QuizPlayerScreen(
                                         contentDescription = "Déjà essayée",
                                         tint = qColors.coralInk
                                     )
+                                } else if (q.isMultiSelect) {
+                                    Icon(
+                                        imageVector = if (isSelected) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
+                                        contentDescription = if (isSelected) "Option cochée" else "Option non cochée",
+                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                    )
                                 }
                             }
                         }
@@ -1233,8 +1440,48 @@ fun QuizPlayerScreen(
                     }
                 }
 
-                // Benevolent Socratic Guidance on Wrong Attempts (cumulative visible hints, NEVER gives away the answer!)
-                AnimatedVisibility(visible = wrongAttemptsOnQuestion > 0 && !isQuestionSolved && !wasSkipped) {
+                // 2-Consecutive-Errors Auto-Advance Notice (main pass only — NEVER reveals the answer!)
+                AnimatedVisibility(visible = failedOutOnMainPass && !isQuestionSolved) {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = qColors.pastelPeach,
+                        border = BorderStroke(1.2.dp, qColors.coralInk.copy(alpha = 0.42f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 14.dp)
+                            .testTag("quiz_two_errors_advance_card")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            QuizzyAnimatedMascot(
+                                mood = QuizzyMascotMood.ENCOURAGE,
+                                size = 66.dp
+                            )
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Text(
+                                    text = "2 essais utilisés — on passe à la suite !",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = qColors.coralInk,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                                Text(
+                                    text = "Pas de souci ! Cette question reviendra à la fin du quiz en mode rattrapage (0 point, essais illimités) pour que tu la réussisses à ton rythme.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = qColors.bodyInk
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Benevolent Socratic Guidance on Wrong Attempts (shown when still retrying: 1st error in main pass, or any error in unlimited remediation)
+                AnimatedVisibility(visible = wrongAttemptsOnQuestion > 0 && !isQuestionSolved && !wasSkipped && !failedOutOnMainPass) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1251,27 +1498,28 @@ fun QuizPlayerScreen(
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.Top,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Lightbulb,
-                                    contentDescription = null,
-                                    tint = qColors.coralInk,
-                                    modifier = Modifier
-                                        .padding(top = 2.dp)
-                                        .size(22.dp)
+                                QuizzyAnimatedMascot(
+                                    mood = QuizzyMascotMood.ENCOURAGE,
+                                    size = 64.dp
                                 )
-                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
                                     Text(
                                         text = QuizFeedbackHelper.friendlyWrongAnswerMessage(
-                                            currentIndex + wrongAttemptsOnQuestion - 1
+                                            questionIndex = activeQuestionIndex + wrongAttemptsOnQuestion - 1,
+                                            childAge = childAge,
+                                            languageToneLevel = childLanguageToneLevel
                                         ),
                                         style = MaterialTheme.typography.titleSmall,
                                         color = qColors.coralInk,
                                         fontWeight = FontWeight.ExtraBold
                                     )
-                                    if (hadStreakBeforeMiss) {
+                                    if (hadStreakBeforeMiss && !isRemediationPhase) {
                                         Text(
                                             text = "Ta série repart à zéro, tu vas te rattraper très vite !",
                                             style = MaterialTheme.typography.bodySmall,
@@ -1279,14 +1527,12 @@ fun QuizPlayerScreen(
                                         )
                                     }
                                     val xpRetryNotice = when {
+                                        isRemediationPhase ->
+                                            "Rattrapage (0 XP) : tu as autant d'essais que tu veux pour trouver !"
                                         isReplayAttempt ->
-                                            "Mode entraînement (0 XP) : continue à chercher tranquillement."
-                                        wrongAttemptsOnQuestion == 1 ->
-                                            "Tu peux réessayer pour gagner la moitié des points (+$nextTryPotentialXp XP)"
-                                        wrongAttemptsOnQuestion == 2 ->
-                                            "Nouvel indice ! Si tu trouves à cet essai, tu gagnes la moitié des points précédents (+$nextTryPotentialXp XP)"
+                                            "Mode entraînement (0 XP) : il te reste 1 essai sur cette question."
                                         else ->
-                                            "Tu peux continuer à essayer pour apprendre ! Aucun point (0 XP) ne sera attribué à ce niveau."
+                                            "Dernier essai sur cette question pour gagner la moitié des points (+$nextTryPotentialXp XP)"
                                     }
                                     Surface(
                                         shape = RoundedCornerShape(12.dp),
@@ -1335,30 +1581,41 @@ fun QuizPlayerScreen(
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Lightbulb,
-                                            contentDescription = null,
-                                            tint = qColors.warningInk,
-                                            modifier = Modifier.size(18.dp)
+                                        QuizzyAnimatedMascot(
+                                            mood = QuizzyMascotMood.THINKING,
+                                            size = 52.dp
                                         )
-                                        Text(
-                                            text = "Indice 1 • Piste de réflexion",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = qColors.headingInk,
-                                            fontWeight = FontWeight.ExtraBold
-                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Filled.Lightbulb,
+                                                    contentDescription = null,
+                                                    tint = qColors.warningInk,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Text(
+                                                    text = "Indice 1 • Piste de réflexion",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    color = qColors.headingInk,
+                                                    fontWeight = FontWeight.ExtraBold
+                                                )
+                                            }
+                                            Text(
+                                                text = hint1,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = qColors.bodyInk,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
                                     }
-                                    Text(
-                                        text = hint1,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = qColors.bodyInk,
-                                        fontWeight = FontWeight.Medium
-                                    )
                                 }
 
-                                // Indice 2 (visible TOGETHER with Indice 1 from 2nd wrong attempt onward!)
+                                // Indice 2 (shown together with Indice 1 from 2nd wrong attempt in unlimited remediation)
                                 if (wrongAttemptsOnQuestion >= 2) {
                                     Surface(
                                         shape = RoundedCornerShape(14.dp),
@@ -1426,18 +1683,18 @@ fun QuizPlayerScreen(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "Noté pour tes prochaines révisions !",
+                                text = "Gardée pour ton rattrapage de fin de quiz !",
                                 style = MaterialTheme.typography.titleSmall,
                                 color = qColors.headingInk,
                                 fontWeight = FontWeight.ExtraBold
                             )
                             Text(
-                                text = "Je ne te donne pas la réponse pour que tu puisses la découvrir en relisant ton cours. Garde cette piste en tête :",
+                                text = "Tu la retrouveras à la fin du quiz avec des essais illimités. Garde cette piste en tête :",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = qColors.bodyInk
                             )
                             Text(
-                                text = if (wrongAttemptsOnQuestion >= 2) "$hint1\n$hint2" else hint1,
+                                text = hint1,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.SemiBold
@@ -1446,7 +1703,7 @@ fun QuizPlayerScreen(
                     }
                 }
 
-                // Solved Celebration (only shown AFTER the child finds the right answer themselves)
+                // Solved Celebration with rotating educational animations
                 AnimatedVisibility(visible = isQuestionSolved) {
                     val cleanExplanation = QuizFeedbackHelper.sanitizeNeutralExplanation(q.explanation)
                     Column(
@@ -1465,21 +1722,21 @@ fun QuizPlayerScreen(
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.Top,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Icon(
-                                    imageVector = if (currentStreak >= 2) Icons.Filled.LocalFireDepartment
-                                    else Icons.Filled.CheckCircle,
-                                    contentDescription = null,
-                                    tint = qColors.successInk,
-                                    modifier = Modifier
-                                        .padding(top = 2.dp)
-                                        .size(22.dp)
+                                QuizzyAnimatedMascot(
+                                    mood = QuizzyMascotMood.VICTORY,
+                                    size = 68.dp
                                 )
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
                                     Text(
                                         text = when {
+                                            isRemediationPhase ->
+                                                "0 XP • Bravo, question de rattrapage validée !"
                                             isReplayAttempt && wrongAttemptsOnQuestion > 0 ->
                                                 "Super persévérance ! Tu as trouvé la bonne réponse par toi-même !"
                                             isReplayAttempt ->
@@ -1488,18 +1745,14 @@ fun QuizPlayerScreen(
                                             wrongAttemptsOnQuestion == 0 ->
                                                 if (currentStreak >= 2) "+$lastQuestionXp XP • Bravo, série x$currentStreak !"
                                                 else "+$lastQuestionXp XP • Bravo, bonne réponse !"
-                                            wrongAttemptsOnQuestion == 1 ->
-                                                "+$lastQuestionXp XP (½ points) • Super persévérance ! Tu as trouvé la bonne réponse par toi-même !"
-                                            wrongAttemptsOnQuestion == 2 ->
-                                                "+$lastQuestionXp XP (¼ points) • Super persévérance ! Tu as trouvé avec les 2 indices !"
                                             else ->
-                                                "0 XP à ce niveau • Belle persévérance ! Tu as trouvé la bonne réponse par toi-même !"
+                                                "+$lastQuestionXp XP (½ points) • Super persévérance ! Tu as trouvé la bonne réponse par toi-même !"
                                         },
                                         style = MaterialTheme.typography.titleSmall,
                                         color = qColors.successInk,
                                         fontWeight = FontWeight.ExtraBold
                                     )
-                                    if (wrongAttemptsOnQuestion > 0) {
+                                    if (!isRemediationPhase && wrongAttemptsOnQuestion > 0) {
                                         Text(
                                             text = "Enregistrée comme mauvaise réponse (1er essai) pour ta révision du dimanche 14h.",
                                             style = MaterialTheme.typography.labelSmall,
@@ -1544,11 +1797,11 @@ fun QuizPlayerScreen(
 
                 if (!isQuestionResolved) {
                     val canSubmit = when {
-                        q.isImageChoice -> selectedOption != null
+                        q.isImageChoice -> if (q.isMultiSelect) selectedOptions.isNotEmpty() else selectedOption != null
                         q.isDragMatch -> dragMatchAssignments.size == q.matchingPairs.size
                         q.isDragOrder -> dragOrderSlots.size == q.orderedItems.size && dragOrderSlots.none { it == null }
                         q.isFillBlank -> textAnswer.isNotBlank()
-                        else -> selectedOption != null
+                        else -> if (q.isMultiSelect) selectedOptions.isNotEmpty() else selectedOption != null
                     }
                     Button(
                         onClick = { validateCurrentAnswer() },
@@ -1570,10 +1823,15 @@ fun QuizPlayerScreen(
                         )
                     }
 
-                    if (wrongAttemptsOnQuestion >= 1) {
+                    if (!isRemediationPhase && wrongAttemptsOnQuestion >= 1) {
                         Spacer(Modifier.height(8.dp))
                         TextButton(
-                            onClick = { wasSkipped = true },
+                            onClick = {
+                                wasSkipped = true
+                                if (activeQuestionIndex !in remediationQuestionIndices) {
+                                    remediationQuestionIndices.add(activeQuestionIndex)
+                                }
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 48.dp)
@@ -1587,13 +1845,25 @@ fun QuizPlayerScreen(
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                text = "Passer cette question pour plus tard",
+                                text = "Passer cette question pour la fin du quiz",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
                     }
                 } else {
+                    val nextLabel = when {
+                        isRemediationPhase && remediationPosition < remediationQueue.lastIndex ->
+                            "Question de rattrapage suivante"
+                        isRemediationPhase ->
+                            "Terminer le quiz"
+                        currentIndex < questions.lastIndex ->
+                            "Question suivante"
+                        remediationQuestionIndices.isNotEmpty() ->
+                            "Revoir mes erreurs (${remediationQuestionIndices.size})"
+                        else ->
+                            "Voir mon résultat"
+                    }
                     Button(
                         onClick = { moveToNextQuestion() },
                         modifier = Modifier
@@ -1602,13 +1872,12 @@ fun QuizPlayerScreen(
                             .testTag("quiz_next_button"),
                         shape = RoundedCornerShape(50),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
+                            containerColor = if (failedOutOnMainPass) qColors.coralInk else MaterialTheme.colorScheme.primary,
+                            contentColor = if (failedOutOnMainPass && qColors.isDark) Color(0xFF0E1726) else MaterialTheme.colorScheme.onPrimary
                         )
                     ) {
                         Text(
-                            text = if (currentIndex < questions.lastIndex) "Question suivante"
-                            else "Voir mon résultat",
+                            text = nextLabel,
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.ExtraBold
                         )

@@ -81,6 +81,7 @@ import androidx.compose.ui.window.Dialog
 import com.example.model.ChildProfile
 import com.example.model.Family
 import com.example.model.GamificationCatalog
+import com.example.model.LanguageToneCatalog
 import com.example.model.Lesson
 import com.example.model.Quiz
 import com.example.model.QuizAttempt
@@ -90,9 +91,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import com.example.ui.components.BadgeShowcaseRow
 import com.example.ui.components.ChildAvatarBadge
 import com.example.ui.components.GradeLevelSelector
@@ -105,6 +108,8 @@ import com.example.ui.components.scoreColor
 import com.example.ui.components.subjectColor
 import com.example.ui.components.subjectIcon
 import com.example.ui.components.subjectShortLabel
+import com.example.data.local.GameScoreEntity
+import com.example.data.local.SubjectSqlStats
 import com.example.ui.theme.ParentMintBar
 import com.example.ui.theme.QuizzyTheme
 import com.example.ui.viewmodel.OperationStatus
@@ -126,7 +131,13 @@ fun ParentDashboardScreen(
     unreadNotificationCount: Int = 0,
     notificationsPermissionGranted: Boolean = true,
     onRequestNotificationPermission: () -> Unit = {},
-    onMarkNotificationsRead: () -> Unit = {}
+    onMarkNotificationsRead: () -> Unit = {},
+    sqlGameScores: List<GameScoreEntity> = emptyList(),
+    sqlStudioImagesCount: Int = 0,
+    sqlSubjectStats: List<SubjectSqlStats> = emptyList(),
+    onUpdateChildLanguageTone: (childId: String, toneLevel: String) -> Unit = { _, _ -> },
+    onAddChildWithTone: ((name: String, age: Int, grade: String, avatar: String, pin: String, languageToneLevel: String) -> Unit)? = null,
+    onEditChildWithTone: ((childId: String, name: String, age: Int, grade: String, avatar: String, newPin: String?, languageToneLevel: String) -> Unit)? = null
 ) {
     val clipboard = LocalClipboardManager.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -162,7 +173,8 @@ fun ParentDashboardScreen(
             onBack = { selectedChildId = null },
             onOpenLesson = { inspectedLessonId = it.id },
             onEdit = { editingChild = selectedChild },
-            onDelete = { deletingChild = selectedChild }
+            onDelete = { deletingChild = selectedChild },
+            onUpdateLanguageTone = { tone -> onUpdateChildLanguageTone(selectedChild.id, tone) }
         )
     } else {
         BackHandler(onBack = onSwitchProfile)
@@ -469,6 +481,16 @@ fun ParentDashboardScreen(
                         )
                     }
 
+                    // 3b. Niveau de langage et maturité des textes IA (configurable par l'adulte)
+                    item {
+                        ParentLanguageToneCard(
+                            child = focusedChild,
+                            onSelectTone = { tone ->
+                                onUpdateChildLanguageTone(focusedChild.id, tone)
+                            }
+                        )
+                    }
+
                     // 4. "Réussites de la semaine" Clean Labeled Bar Chart + "Voir les progrès" CTA
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -518,6 +540,59 @@ fun ParentDashboardScreen(
                             value = if (totalQuestions > 0) "$globalSuccess%" else "--",
                             modifier = Modifier.weight(1f)
                         )
+                    }
+                }
+
+                // Local Room SQLite 3D & AI Studio Telemetry Recap
+                item {
+                    val best3D = sqlGameScores.maxOfOrNull { it.score } ?: 0
+                    ModernCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("parent_sql_telemetry_card"),
+                        cornerRadius = 22.dp,
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = "Jeu 3D, Studio IA & Base SQL locale",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = qColors.headingInk
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                StatMiniCard(
+                                    label = "Parties 3D",
+                                    value = "${sqlGameScores.size}",
+                                    modifier = Modifier.weight(1f)
+                                )
+                                StatMiniCard(
+                                    label = "Record 3D",
+                                    value = if (best3D > 0) "$best3D" else "--",
+                                    modifier = Modifier.weight(1f)
+                                )
+                                StatMiniCard(
+                                    label = "Images IA",
+                                    value = "$sqlStudioImagesCount",
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            if (sqlSubjectStats.isNotEmpty()) {
+                                Text(
+                                    text = "Moyennes SQL : " + sqlSubjectStats.take(3).joinToString(" • ") {
+                                        "${it.subject} ${it.avgScore.toInt()}%"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -735,8 +810,12 @@ fun ParentDashboardScreen(
             title = "Nouveau profil enfant",
             existingChild = null,
             onDismiss = { showAddChildDialog = false },
-            onSave = { name, age, grade, avatar, pin ->
-                onAddChild(name, age, grade, avatar, pin ?: "1234")
+            onSave = { name, age, grade, avatar, pin, toneLevel ->
+                if (onAddChildWithTone != null) {
+                    onAddChildWithTone(name, age, grade, avatar, pin ?: "1234", toneLevel)
+                } else {
+                    onAddChild(name, age, grade, avatar, pin ?: "1234")
+                }
                 showAddChildDialog = false
             }
         )
@@ -747,8 +826,15 @@ fun ParentDashboardScreen(
             title = "Modifier ${childToEdit.name}",
             existingChild = childToEdit,
             onDismiss = { editingChild = null },
-            onSave = { name, age, grade, avatar, pin ->
-                onEditChild(childToEdit.id, name, age, grade, avatar, pin)
+            onSave = { name, age, grade, avatar, pin, toneLevel ->
+                if (onEditChildWithTone != null) {
+                    onEditChildWithTone(childToEdit.id, name, age, grade, avatar, pin, toneLevel)
+                } else {
+                    onEditChild(childToEdit.id, name, age, grade, avatar, pin)
+                    if (toneLevel != childToEdit.languageToneLevel) {
+                        onUpdateChildLanguageTone(childToEdit.id, toneLevel)
+                    }
+                }
                 editingChild = null
             }
         )
@@ -954,6 +1040,110 @@ private fun ParentSkillsRecapCard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ParentLanguageToneCard(
+    child: ChildProfile,
+    onSelectTone: (String) -> Unit
+) {
+    val qColors = QuizzyTheme.colors
+    val activeTone = LanguageToneCatalog.normalize(child.languageToneLevel)
+    val activeOption = remember(activeTone) { LanguageToneCatalog.optionFor(activeTone) }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("parent_language_tone_card"),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(qColors.parentSkyContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Tune,
+                        contentDescription = null,
+                        tint = qColors.parentSkyAccent,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Niveau de langage IA (${child.name})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = qColors.headingInk
+                    )
+                    Text(
+                        text = "Par défaut adapté à l'âge (${child.age} ans • ${child.gradeLevel}). Ajuste la maturité des synthèses, conseils et indices :",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                LanguageToneCatalog.options.forEach { option ->
+                    FilterChip(
+                        selected = activeTone == option.id,
+                        onClick = { onSelectTone(option.id) },
+                        label = {
+                            Text(
+                                text = option.shortLabel,
+                                fontWeight = if (activeTone == option.id) FontWeight.ExtraBold else FontWeight.Medium
+                            )
+                        },
+                        modifier = Modifier.testTag("parent_tone_chip_${option.id}")
+                    )
+                }
+            }
+
+            Surface(
+                color = qColors.pastelMint,
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("parent_tone_active_description")
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = "Mode actif : ${activeOption.title}",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = qColors.headingInk
+                    )
+                    Text(
+                        text = activeOption.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = qColors.bodyInk
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ParentChildDetailView(
     child: ChildProfile,
@@ -962,7 +1152,8 @@ private fun ParentChildDetailView(
     onBack: () -> Unit,
     onOpenLesson: (Lesson) -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onUpdateLanguageTone: (String) -> Unit = {}
 ) {
     BackHandler(onBack = onBack)
 
@@ -1055,6 +1246,13 @@ private fun ParentChildDetailView(
                     child = child,
                     childLessons = lessons,
                     childAttempts = attempts
+                )
+            }
+
+            item {
+                ParentLanguageToneCard(
+                    child = child,
+                    onSelectTone = onUpdateLanguageTone
                 )
             }
 
@@ -1171,18 +1369,22 @@ private fun ParentChildDetailView(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChildProfileFormDialog(
     title: String,
     existingChild: ChildProfile?,
     onDismiss: () -> Unit,
-    onSave: (name: String, age: Int, grade: String, avatar: String, pin: String?) -> Unit
+    onSave: (name: String, age: Int, grade: String, avatar: String, pin: String?, languageToneLevel: String) -> Unit
 ) {
     var name by remember { mutableStateOf(existingChild?.name ?: "") }
     var grade by remember { mutableStateOf(existingChild?.gradeLevel ?: "CM1") }
     var age by remember { mutableIntStateOf(existingChild?.age?.toInt() ?: 9) }
     var avatar by remember { mutableStateOf(existingChild?.avatarKey ?: "owl") }
     var pin by remember { mutableStateOf("") }
+    var languageToneLevel by remember {
+        mutableStateOf(LanguageToneCatalog.normalize(existingChild?.languageToneLevel))
+    }
 
     val pinValid = if (existingChild == null) pin.length == 4 else (pin.isEmpty() || pin.length == 4)
 
@@ -1240,6 +1442,28 @@ private fun ChildProfileFormDialog(
                 AvatarPickerRow(selectedAvatar = avatar, onSelect = { avatar = it })
 
                 Spacer(Modifier.height(12.dp))
+                Text("Niveau de langage & maturité IA :", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(6.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    LanguageToneCatalog.options.forEach { option ->
+                        FilterChip(
+                            selected = languageToneLevel == option.id,
+                            onClick = { languageToneLevel = option.id },
+                            label = { Text(option.shortLabel) },
+                            modifier = Modifier.testTag("dialog_child_tone_${option.id}")
+                        )
+                    }
+                }
+                Text(
+                    text = LanguageToneCatalog.optionFor(languageToneLevel).description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = pin,
                     onValueChange = { if (it.length <= 4 && it.all(Char::isDigit)) pin = it },
@@ -1267,7 +1491,7 @@ private fun ChildProfileFormDialog(
                         Text("Annuler")
                     }
                     Button(
-                        onClick = { onSave(name, age, grade, avatar, pin.ifBlank { null }) },
+                        onClick = { onSave(name, age, grade, avatar, pin.ifBlank { null }, languageToneLevel) },
                         enabled = name.isNotBlank() && pinValid,
                         modifier = Modifier
                             .weight(1f)

@@ -1,0 +1,1748 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Quizzy 3D Arena</title>
+<style>
+  :root {
+    --bg-deep: #0b162c;
+    --panel-solid: rgba(11, 22, 44, 0.94);
+    --panel-border: rgba(92, 225, 214, 0.42);
+    --turquoise: #2dd4bf;
+    --turquoise-deep: #007d84;
+    --coral: #ff6b4a;
+    --gold: #ffd34e;
+    --ink: #f4f8ff;
+    --ink-soft: #b8c9e6;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body {
+    margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden;
+    background: var(--bg-deep); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    touch-action: none;
+  }
+  #viewport { position: fixed; inset: 0; width: 100vw; height: 100vh; }
+  #viewport canvas { display: block; width: 100%; height: 100%; }
+
+  /* HUD Layer — padded below native top bar so controls never overlap */
+  .hud-layer {
+    position: fixed; inset: 0; pointer-events: none; z-index: 10;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 66px 12px 14px;
+  }
+  .hidden { display: none !important; }
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  .hud-top {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .hud-cluster {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+  .pill {
+    pointer-events: auto;
+    background: var(--panel-solid);
+    border: 1.5px solid var(--panel-border);
+    border-radius: 999px;
+    padding: 6px 12px;
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 14px; font-weight: 800; color: var(--ink);
+    letter-spacing: 0.02em;
+  }
+  .pill.gold { border-color: rgba(255, 211, 78, 0.7); color: var(--gold); }
+  .pill.coral { border-color: rgba(255, 107, 74, 0.7); color: #ffab96; }
+  .icon-btn {
+    pointer-events: auto;
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--panel-solid);
+    border: 1.5px solid var(--panel-border);
+    color: var(--ink); font-size: 17px; font-weight: 800;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: transform 140ms ease;
+  }
+  .icon-btn:active { transform: scale(0.92); }
+
+  /* HIGH-READABILITY QUESTION BANNER */
+  .question-banner {
+    align-self: center;
+    width: min(96vw, 660px);
+    background: rgba(9, 19, 38, 0.95);
+    border: 2px solid rgba(255, 211, 78, 0.85);
+    border-radius: 20px;
+    padding: 12px 16px;
+    text-align: center;
+    margin-top: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  }
+  .question-subject {
+    font-size: 13px; font-weight: 900; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--turquoise); margin-bottom: 5px;
+  }
+  .question-text {
+    font-size: clamp(19px, 4.7vw, 24px);
+    font-weight: 900;
+    line-height: 1.3;
+    color: #ffffff;
+  }
+
+  /* Feedback toast */
+  .feedback-toast {
+    align-self: center;
+    padding: 9px 18px; border-radius: 999px;
+    font-size: 15px; font-weight: 900; letter-spacing: 0.02em;
+    opacity: 0; transform: translateY(8px);
+    transition: opacity 160ms ease, transform 160ms ease;
+    text-align: center;
+  }
+  .feedback-toast.show { opacity: 1; transform: translateY(0); }
+  .feedback-toast.ok { background: #0f766e; color: #ffffff; border: 2px solid #5eead4; }
+  .feedback-toast.bad { background: #9a3412; color: #ffffff; border: 2px solid #fdba74; }
+
+  /* Bottom stack: 3 Large Readable Lane Answer Cards + Steering Strip */
+  .hud-bottom-stack {
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .lane-answers {
+    pointer-events: auto;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+    max-width: 720px;
+    align-self: center;
+  }
+  .answer-card {
+    background: rgba(11, 22, 44, 0.94);
+    border: 2px solid rgba(92, 225, 214, 0.48);
+    border-radius: 16px;
+    padding: 10px 8px;
+    min-height: 68px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+    text-align: center;
+    transition: transform 120ms ease, border-color 140ms ease, background 140ms ease;
+  }
+  .answer-card:active { transform: scale(0.95); }
+  .answer-card.active {
+    background: rgba(0, 125, 132, 0.95);
+    border-color: #ffd34e;
+    box-shadow: 0 0 18px rgba(255, 211, 78, 0.45);
+    transform: translateY(-2px);
+  }
+  .answer-lane-badge {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    color: var(--gold);
+    text-transform: uppercase;
+  }
+  .answer-card-text {
+    font-size: clamp(14px, 3.8vw, 17px);
+    font-weight: 900;
+    line-height: 1.22;
+    color: #ffffff;
+    word-break: break-word;
+  }
+
+  .hud-bottom {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    width: 100%; max-width: 720px; align-self: center;
+  }
+  .lane-controls {
+    pointer-events: auto;
+    display: flex; gap: 10px;
+  }
+  .ctrl-btn {
+    min-width: 60px; height: 48px; border-radius: 16px;
+    background: var(--panel-solid);
+    border: 1.5px solid var(--panel-border);
+    color: var(--ink); font-size: 20px; font-weight: 900;
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0 16px; cursor: pointer;
+    transition: transform 110ms ease, background 110ms ease;
+  }
+  .ctrl-btn:active { transform: scale(0.92); background: rgba(45, 212, 191, 0.25); }
+  .ctrl-btn.boost {
+    border-color: rgba(255, 107, 74, 0.72);
+    color: #ffd34e; font-size: 14px; letter-spacing: 0.04em;
+  }
+
+  /* Title Screen Overlay */
+  #title-screen {
+    position: fixed; inset: 0; z-index: 20; pointer-events: none;
+    display: flex; flex-direction: column; justify-content: space-between;
+    align-items: center; padding: 72px 18px 24px;
+    background: linear-gradient(180deg, rgba(8,16,32,0.58) 0%, rgba(8,16,32,0.06) 44%, rgba(8,16,32,0.78) 100%);
+  }
+  .title-lockup {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .mission-badge {
+    background: rgba(11, 22, 44, 0.9);
+    border: 1.5px solid rgba(255, 211, 78, 0.65);
+    border-radius: 999px;
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--gold);
+    text-align: center;
+  }
+  .title-actions {
+    pointer-events: auto;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    width: 100%; max-width: 350px;
+  }
+  .btn-primary {
+    width: 100%; min-height: 54px; border: none; border-radius: 999px;
+    background: linear-gradient(135deg, #2dd4bf, #00828a);
+    color: #041d24; font-size: 17px; font-weight: 900; letter-spacing: 0.04em;
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    box-shadow: 0 10px 26px rgba(0, 130, 138, 0.42);
+    transition: transform 140ms ease;
+  }
+  .btn-primary:active { transform: scale(0.96); }
+  .btn-secondary {
+    width: 100%; min-height: 48px; border-radius: 999px;
+    background: var(--panel-solid);
+    border: 1.5px solid rgba(255, 211, 78, 0.62);
+    color: var(--gold); font-size: 15px; font-weight: 800;
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: transform 140ms ease;
+  }
+  .btn-secondary:active { transform: scale(0.96); }
+  .control-hint {
+    font-size: 13px; font-weight: 700; color: var(--ink-soft);
+    text-align: center;
+    background: rgba(11, 22, 44, 0.85);
+    padding: 7px 14px; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.14);
+  }
+
+  /* Pause / Victory / Game Over Modal */
+  #modal-overlay {
+    position: fixed; inset: 0; z-index: 30;
+    background: rgba(6, 12, 26, 0.82);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-card {
+    width: 100%; max-width: 370px;
+    background: #101d38;
+    border: 2px solid rgba(92, 225, 214, 0.48);
+    border-radius: 26px;
+    padding: 22px 20px;
+    text-align: center;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .modal-title { font-size: 24px; font-weight: 900; color: #ffffff; margin: 0; }
+  .modal-sub { font-size: 14px; color: var(--ink-soft); margin: 0; line-height: 1.45; }
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  }
+  .stat-box {
+    background: #18294a; border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px; padding: 10px 6px;
+  }
+  .stat-val { font-size: 19px; font-weight: 900; color: var(--gold); }
+  .stat-lbl { font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-top: 2px; }
+
+  /* Collapsible 3D Labo Floating Dock */
+  #explorer-dock {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 18; width: min(94vw, 430px);
+    background: var(--panel-solid);
+    border: 1.5px solid var(--panel-border);
+    border-radius: 22px; padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .dock-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .dock-title { font-size: 14px; font-weight: 900; color: var(--gold); }
+  .dock-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .dock-chip {
+    flex: 1; min-width: 90px; min-height: 40px; border-radius: 12px;
+    background: #172747; border: 1px solid rgba(255,255,255,0.16);
+    color: var(--ink); font-size: 13px; font-weight: 800; cursor: pointer;
+    padding: 6px 8px;
+  }
+  .dock-chip.active {
+    background: #007d84; border-color: #5ce1d6; color: #ffffff;
+  }
+  .dock-caption { font-size: 13px; color: var(--ink-soft); line-height: 1.4; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="viewport"></div>
+
+<!-- Title Screen -->
+<div id="title-screen">
+  <div class="title-lockup">
+    <svg width="290" height="88" viewBox="0 0 290 88" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Quizzy 3D Arena">
+      <defs>
+        <linearGradient id="qGrad" x1="0" y1="0" x2="290" y2="88" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#5CE1D6"/>
+          <stop offset="55%" stop-color="#FFD34E"/>
+          <stop offset="100%" stop-color="#FF6B4A"/>
+        </linearGradient>
+      </defs>
+      <rect x="6" y="6" width="278" height="76" rx="22" fill="#0B162C" fill-opacity="0.86" stroke="url(#qGrad)" stroke-width="2.5"/>
+      <polygon points="40,22 45,35 59,35 48,43 52,57 40,49 28,57 32,43 21,35 35,35" fill="#FFD34E"/>
+      <circle cx="36" cy="39" r="2.2" fill="#1D2C6E"/>
+      <circle cx="44" cy="39" r="2.2" fill="#1D2C6E"/>
+      <path d="M36 44 Q40 48 44 44" stroke="#1D2C6E" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <text x="72" y="45" fill="#FFFFFF" font-size="25" font-weight="900" letter-spacing="1.2">QUIZZY 3D</text>
+      <text x="72" y="65" fill="#5CE1D6" font-size="13" font-weight="800" letter-spacing="2.8">SKY ARENA • LABO 3D</text>
+    </svg>
+    <div id="title-mission-badge" class="mission-badge">Général • Facile ×1</div>
+  </div>
+
+  <div class="title-actions">
+    <button id="btn-start-game" class="btn-primary">▶ JOUER EN 3D</button>
+    <button id="btn-open-explorer" class="btn-secondary">🪐 EXPLORER LE LABO 3D</button>
+    <div class="control-hint">Appuie sur la bonne réponse ou glisse ◀ ▶</div>
+  </div>
+</div>
+
+<!-- Active Game HUD -->
+<div id="game-hud" class="hud-layer hidden">
+  <div>
+    <div class="hud-top">
+      <div class="hud-cluster">
+        <div class="pill gold tabular" id="hud-score">★ 0</div>
+        <div class="pill tabular" id="hud-combo">x1</div>
+        <div class="pill coral tabular" id="hud-lives">♥♥♥♥</div>
+      </div>
+      <div class="hud-cluster">
+        <button id="btn-mute" class="icon-btn" aria-label="Son">🔊</button>
+        <button id="btn-pause" class="icon-btn" aria-label="Pause">⏸</button>
+      </div>
+    </div>
+    <div class="question-banner" id="question-banner">
+      <div class="question-subject" id="q-subject">QUIZZY ARENA</div>
+      <div class="question-text" id="q-prompt">Prépare-toi à traverser la bonne porte !</div>
+    </div>
+  </div>
+
+  <div id="feedback-toast" class="feedback-toast">Bravo ! +100</div>
+
+  <div class="hud-bottom-stack">
+    <!-- 3 Large Clickable Answer Cards Synchronized with the 3D Lanes -->
+    <div class="lane-answers" id="lane-answers">
+      <button class="answer-card" id="ans-card-0" data-lane="0" type="button">
+        <span class="answer-lane-badge">◀ Gauche</span>
+        <span class="answer-card-text" id="ans-text-0">Réponse 1</span>
+      </button>
+      <button class="answer-card active" id="ans-card-1" data-lane="1" type="button">
+        <span class="answer-lane-badge">▲ Centre</span>
+        <span class="answer-card-text" id="ans-text-1">Réponse 2</span>
+      </button>
+      <button class="answer-card" id="ans-card-2" data-lane="2" type="button">
+        <span class="answer-lane-badge">Droite ▶</span>
+        <span class="answer-card-text" id="ans-text-2">Réponse 3</span>
+      </button>
+    </div>
+
+    <div class="hud-bottom">
+      <div class="lane-controls">
+        <button id="btn-left" class="ctrl-btn" aria-label="Gauche">◀</button>
+        <button id="btn-right" class="ctrl-btn" aria-label="Droite">▶</button>
+      </div>
+      <button id="btn-boost" class="ctrl-btn boost">⚡ ACCÉLÉRER</button>
+    </div>
+  </div>
+</div>
+
+<!-- 3D Explorer Top Controls & Collapsible Dock -->
+<div id="explorer-top" class="hud-layer hidden" style="pointer-events:none; bottom:auto;">
+  <div class="hud-top">
+    <button id="btn-explorer-back" class="pill" style="cursor:pointer;">← Menu 3D</button>
+    <div class="pill gold" id="explorer-hint">Tourner & Zoomer 3D</div>
+  </div>
+</div>
+
+<div id="explorer-dock" class="hidden">
+  <div class="dock-header">
+    <span class="dock-title" id="dock-model-title">🪐 Système Solaire 3D</span>
+    <button id="btn-toggle-dock" class="pill" style="padding:4px 10px; font-size:12px; cursor:pointer;">Réduire</button>
+  </div>
+  <div id="dock-body">
+    <div class="dock-chips">
+      <button class="dock-chip active" data-model="solar">Système Solaire</button>
+      <button class="dock-chip" data-model="molecule">Molécule H₂O</button>
+      <button class="dock-chip" data-model="geometry">Solides 3D</button>
+    </div>
+    <div class="dock-caption" id="dock-caption" style="margin-top:6px;">
+      Observe les planètes en orbite autour du Soleil et l'anneau incliné de Saturne.
+    </div>
+  </div>
+</div>
+
+<!-- Pause / Victory / Game Over Modal -->
+<div id="modal-overlay" class="hidden">
+  <div class="modal-card">
+    <h2 class="modal-title" id="modal-title">Pause</h2>
+    <p class="modal-sub" id="modal-sub">Reprends ta course à travers les portes du savoir !</p>
+    <div class="stats-grid" id="modal-stats">
+      <div class="stat-box">
+        <div class="stat-val tabular" id="stat-score">0</div>
+        <div class="stat-lbl">Score</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val tabular" id="stat-correct">0/0</div>
+        <div class="stat-lbl">Portes</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val tabular" id="stat-combo">x1</div>
+        <div class="stat-lbl">Max Combo</div>
+      </div>
+    </div>
+    <button id="btn-modal-primary" class="btn-primary">Reprendre</button>
+    <button id="btn-modal-secondary" class="btn-secondary">Retour au menu</button>
+  </div>
+</div>
+
+<script type="module">
+const FALLBACK_QUESTIONS = [
+  { subject: "Mathématiques", prompt: "Combien font 7 × 8 ?", options: ["54", "56", "64"], correct: 1 },
+  { subject: "Français", prompt: "Quel mot est un verbe conjugué ?", options: ["rapide", "sautent", "maison"], correct: 1 },
+  { subject: "Sciences", prompt: "Quelle planète possède de grands anneaux ?", options: ["Saturne", "Mercure", "Mars"], correct: 0 },
+  { subject: "Anglais", prompt: "Comment dit-on « canapé » en anglais ?", options: ["table", "chair", "sofa"], correct: 2 },
+  { subject: "Mathématiques", prompt: "Quelle fraction vaut la moitié ?", options: ["1/4", "1/2", "3/4"], correct: 1 },
+  { subject: "Histoire-Géo", prompt: "Quelle est la capitale de la France ?", options: ["Paris", "Lyon", "Bordeaux"], correct: 0 },
+  { subject: "Sciences", prompt: "Formule chimique de l'eau ?", options: ["CO₂", "O₂", "H₂O"], correct: 2 },
+  { subject: "Anglais", prompt: "Que signifie « library » ?", options: ["librairie", "bibliothèque", "cuisine"], correct: 1 }
+];
+
+// Difficulty presets: calm, readable ship speeds with reading assist near gates
+const DIFFICULTY_PRESETS = {
+  "Facile": {
+    label: "Facile ×1",
+    multiplier: 1.0,
+    baseSpeed: 5.4,
+    speedStep: 0.22,
+    spawnZ: -66,
+    lives: 4,
+    assistFactor: 0.84,
+    canvasSpeed: 46,
+    hasAsteroids: false
+  },
+  "Moyen": {
+    label: "Moyen ×1.2",
+    multiplier: 1.2,
+    baseSpeed: 7.2,
+    speedStep: 0.35,
+    spawnZ: -64,
+    lives: 3,
+    assistFactor: 0.86,
+    canvasSpeed: 66,
+    hasAsteroids: true
+  },
+  "Difficile": {
+    label: "Difficile ×1.5",
+    multiplier: 1.5,
+    baseSpeed: 9.4,
+    speedStep: 0.50,
+    spawnZ: -62,
+    lives: 3,
+    assistFactor: 0.90,
+    canvasSpeed: 90,
+    hasAsteroids: true
+  }
+};
+
+let currentConfig = {
+  subject: "Général",
+  difficulty: "Facile"
+};
+
+function getPreset() {
+  return DIFFICULTY_PRESETS[currentConfig.difficulty] || DIFFICULTY_PRESETS["Facile"];
+}
+
+function loadQuestions() {
+  try {
+    if (Array.isArray(window.QUIZZY_QUESTIONS) && window.QUIZZY_QUESTIONS.length > 0) {
+      return window.QUIZZY_QUESTIONS.map(q => ({
+        subject: q.subject || currentConfig.subject || "Général",
+        prompt: q.prompt || "Choisis la bonne porte !",
+        options: Array.isArray(q.options) && q.options.length === 3 ? q.options : ["A", "B", "C"],
+        correct: Math.max(0, Math.min(2, Number(q.correct) || 0))
+      }));
+    }
+  } catch (_) {}
+  return FALLBACK_QUESTIONS;
+}
+
+// Procedural Web Audio Synthesizer
+class SoundSynth {
+  constructor() {
+    this.ctx = null;
+    this.muted = false;
+  }
+  ensure() {
+    if (this.muted) return null;
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) this.ctx = new AudioCtx();
+    }
+    if (this.ctx && this.ctx.state === "suspended") this.ctx.resume();
+    return this.ctx;
+  }
+  tone(freq, dur, type = "triangle", vol = 0.14, slideTo = null) {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, now);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, now + dur);
+    gain.gain.setValueAtTime(vol, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + dur);
+  }
+  playCorrect() {
+    this.tone(523.25, 0.12, "triangle", 0.16);
+    setTimeout(() => this.tone(659.25, 0.14, "triangle", 0.16), 75);
+    setTimeout(() => this.tone(783.99, 0.22, "sine", 0.18), 150);
+  }
+  playGem() {
+    this.tone(880, 0.10, "sine", 0.12, 1320);
+  }
+  playBoost() {
+    this.tone(240, 0.20, "sawtooth", 0.08, 560);
+  }
+  playHit() {
+    this.tone(170, 0.26, "sawtooth", 0.16, 62);
+  }
+  playVictory() {
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
+      setTimeout(() => this.tone(f, 0.24, "triangle", 0.17), i * 110)
+    );
+  }
+}
+const sfx = new SoundSynth();
+
+// UI Elements
+const viewport = document.getElementById("viewport");
+const titleScreen = document.getElementById("title-screen");
+const titleMissionBadge = document.getElementById("title-mission-badge");
+const gameHud = document.getElementById("game-hud");
+const explorerTop = document.getElementById("explorer-top");
+const explorerDock = document.getElementById("explorer-dock");
+const dockBody = document.getElementById("dock-body");
+const btnToggleDock = document.getElementById("btn-toggle-dock");
+const dockModelTitle = document.getElementById("dock-model-title");
+const dockCaption = document.getElementById("dock-caption");
+const modalOverlay = document.getElementById("modal-overlay");
+const modalTitle = document.getElementById("modal-title");
+const modalSub = document.getElementById("modal-sub");
+const statScore = document.getElementById("stat-score");
+const statCorrect = document.getElementById("stat-correct");
+const statCombo = document.getElementById("stat-combo");
+const btnModalPrimary = document.getElementById("btn-modal-primary");
+const btnModalSecondary = document.getElementById("btn-modal-secondary");
+const hudScore = document.getElementById("hud-score");
+const hudCombo = document.getElementById("hud-combo");
+const hudLives = document.getElementById("hud-lives");
+const qSubject = document.getElementById("q-subject");
+const qPrompt = document.getElementById("q-prompt");
+const feedbackToast = document.getElementById("feedback-toast");
+const btnMute = document.getElementById("btn-mute");
+const answerCards = [
+  document.getElementById("ans-card-0"),
+  document.getElementById("ans-card-1"),
+  document.getElementById("ans-card-2")
+];
+const answerTexts = [
+  document.getElementById("ans-text-0"),
+  document.getElementById("ans-text-1"),
+  document.getElementById("ans-text-2")
+];
+
+function updateAnswerCardsSelection(laneIdx) {
+  answerCards.forEach((card, idx) => {
+    card.classList.toggle("active", idx === laneIdx);
+  });
+}
+
+function updateAnswerCardsContent(q) {
+  for (let i = 0; i < 3; i++) {
+    answerTexts[i].textContent = (q && q.options && q.options[i]) ? String(q.options[i]) : "";
+  }
+}
+
+function refreshTitleMissionBadge() {
+  const preset = getPreset();
+  const count = loadQuestions().length;
+  titleMissionBadge.textContent = `${currentConfig.subject} • ${preset.label} • ${count} questions`;
+}
+
+let toastTimer = null;
+function showToast(text, ok) {
+  feedbackToast.textContent = text;
+  feedbackToast.className = "feedback-toast show " + (ok ? "ok" : "bad");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => feedbackToast.classList.remove("show"), 1350);
+}
+
+// Import Three.js with offline Canvas2D fallback if CDN unreachable
+let THREE = null;
+let RoomEnvironment = null;
+let OrbitControls = null;
+try {
+  THREE = await import("three");
+  const envMod = await import("three/addons/environments/RoomEnvironment.js");
+  const ctrlMod = await import("three/addons/controls/OrbitControls.js");
+  RoomEnvironment = envMod.RoomEnvironment;
+  OrbitControls = ctrlMod.OrbitControls;
+} catch (err) {
+  console.warn("Three.js CDN unavailable, launching resilient offline fallback:", err);
+}
+
+let engineStartRun = () => {};
+let engineOpenExplorer = () => {};
+
+if (!THREE) {
+  // Resilient Offline 2.5D Canvas Engine
+  const canvas = document.createElement("canvas");
+  viewport.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
+  const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+  resize(); window.addEventListener("resize", resize);
+  let state = "TITLE", lane = 1, targetLane = 1, score = 0, lives = 4, maxLives = 4, combo = 1, maxCombo = 1, correctCount = 0, qIdx = 0;
+  let questions = loadQuestions(), gateY = 140, startMs = 0, boostTimer = 0;
+
+  const setMode = (m) => {
+    state = m;
+    titleScreen.classList.toggle("hidden", m !== "TITLE");
+    gameHud.classList.toggle("hidden", m !== "PLAYING");
+    modalOverlay.classList.toggle("hidden", m !== "VICTORY" && m !== "GAMEOVER" && m !== "PAUSED");
+  };
+  const syncHud2D = () => {
+    hudScore.textContent = "★ " + score;
+    hudCombo.textContent = "x" + combo;
+    hudLives.textContent = "♥".repeat(Math.max(0, lives)) + "♡".repeat(Math.max(0, maxLives - lives));
+  };
+  const setQ2D = (q) => {
+    const preset = getPreset();
+    qSubject.textContent = `${q.subject} • ${preset.label} • ${qIdx + 1}/${questions.length}`;
+    qPrompt.textContent = q.prompt;
+    updateAnswerCardsContent(q);
+  };
+  const startGame = () => {
+    const preset = getPreset();
+    questions = loadQuestions(); qIdx = 0; score = 0; lives = preset.lives; maxLives = preset.lives;
+    combo = 1; maxCombo = 1; correctCount = 0; lane = 1; targetLane = 1; gateY = 160; startMs = Date.now(); boostTimer = 0;
+    setQ2D(questions[0]);
+    updateAnswerCardsSelection(1);
+    syncHud2D();
+    setMode("PLAYING");
+  };
+  engineStartRun = startGame;
+  engineOpenExplorer = startGame;
+  document.getElementById("btn-start-game").onclick = startGame;
+  document.getElementById("btn-open-explorer").onclick = startGame;
+  document.getElementById("btn-left").onclick = () => { targetLane = Math.max(0, targetLane - 1); updateAnswerCardsSelection(targetLane); };
+  document.getElementById("btn-right").onclick = () => { targetLane = Math.min(2, targetLane + 1); updateAnswerCardsSelection(targetLane); };
+  document.getElementById("btn-boost").onclick = () => { boostTimer = 0.7; };
+  answerCards.forEach((btn, idx) => {
+    btn.onclick = () => {
+      if (state !== "PLAYING") return;
+      targetLane = idx;
+      updateAnswerCardsSelection(targetLane);
+    };
+  });
+  document.getElementById("btn-pause").onclick = () => {
+    modalTitle.textContent = "Pause"; modalSub.textContent = "Reprends quand tu es prêt !";
+    btnModalPrimary.textContent = "▶ Reprendre"; btnModalPrimary.onclick = () => setMode("PLAYING");
+    setMode("PAUSED");
+  };
+  btnModalSecondary.onclick = () => setMode("TITLE");
+
+  let lastT = performance.now();
+  function loop(now) {
+    requestAnimationFrame(loop);
+    const dt = Math.min((now - lastT) / 1000, 0.05); lastT = now;
+    const w = canvas.width, h = canvas.height;
+    ctx.fillStyle = "#0b162c"; ctx.fillRect(0, 0, w, h);
+    const laneXs = [w * 0.19, w * 0.5, w * 0.81];
+    lane += (targetLane - lane) * (1 - Math.exp(-12 * dt));
+    ctx.strokeStyle = "rgba(92,225,214,0.22)"; ctx.lineWidth = 3;
+    laneXs.forEach(x => { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); });
+    if (state === "PLAYING") {
+      if (boostTimer > 0) boostTimer = Math.max(0, boostTimer - dt);
+      const preset = getPreset();
+      gateY += dt * preset.canvasSpeed * (boostTimer > 0 ? 1.4 : 1.0);
+      const q = questions[qIdx];
+      const boxW = Math.min(130, w * 0.29);
+      q.options.forEach((opt, i) => {
+        ctx.fillStyle = i === targetLane ? "#0e4d57" : "#162a4d";
+        ctx.strokeStyle = i === targetLane ? "#ffd34e" : "#2dd4bf";
+        ctx.lineWidth = i === targetLane ? 3 : 2;
+        ctx.fillRect(laneXs[i] - boxW / 2, gateY, boxW, 56);
+        ctx.strokeRect(laneXs[i] - boxW / 2, gateY, boxW, 56);
+        ctx.fillStyle = "#ffffff"; ctx.font = "900 16px sans-serif"; ctx.textAlign = "center";
+        ctx.fillText(String(opt).slice(0, 14), laneXs[i], gateY + 34);
+      });
+      const px = laneXs[0] + lane * (laneXs[1] - laneXs[0]);
+      const py = h * 0.66;
+      ctx.fillStyle = "#ffd34e"; ctx.beginPath(); ctx.arc(px, py, 22, 0, Math.PI * 2); ctx.fill();
+      if (gateY + 56 >= py - 20) {
+        const chosen = Math.round(lane);
+        if (chosen === q.correct) {
+          correctCount++;
+          const pts = Math.round(100 * combo * preset.multiplier);
+          score += pts; combo++; maxCombo = Math.max(maxCombo, combo);
+          sfx.playCorrect(); showToast("Bonne réponse ! +" + pts + " pts", true);
+        } else {
+          lives--; combo = 1; sfx.playHit(); showToast("Mauvaise porte ! Essaie la suivante", false);
+        }
+        syncHud2D();
+        qIdx++; gateY = 160;
+        if (lives <= 0 || qIdx >= questions.length) {
+          const won = lives > 0;
+          modalTitle.textContent = won ? "🏆 Victoire 3D !" : "🚀 Fin de mission";
+          modalSub.textContent = won ? "Ton score est enregistré dans la base SQL !" : "Tu feras encore mieux au prochain essai !";
+          statScore.textContent = score; statCorrect.textContent = correctCount + "/" + questions.length; statCombo.textContent = "x" + maxCombo;
+          btnModalPrimary.textContent = "↻ Rejouer"; btnModalPrimary.onclick = startGame;
+          setMode(won ? "VICTORY" : "GAMEOVER");
+          if (window.QuizzyGameBridge) {
+            window.QuizzyGameBridge.onGameFinished(
+              score, correctCount, questions.length, maxCombo,
+              Math.max(1, Math.round((Date.now() - startMs) / 1000)),
+              currentConfig.subject || "Général"
+            );
+          }
+        } else {
+          setQ2D(questions[qIdx]);
+        }
+      }
+    }
+  }
+  refreshTitleMissionBadge();
+  requestAnimationFrame(loop);
+} else {
+  // =========================================================================
+  // FULL THREE.JS r170 3D ENGINE — ACESFilmic + RoomEnvironment + Composite Models
+  // =========================================================================
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.14;
+  viewport.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const SKY_COLOR = new THREE.Color(0x0d1b36);
+  scene.background = SKY_COLOR;
+  scene.fog = new THREE.FogExp2(0x0d1b36, 0.0115);
+
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+  const camera = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.1, 240);
+  camera.position.set(0, 6.8, 14.2);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.07;
+  controls.minDistance = 4;
+  controls.maxDistance = 28;
+  controls.enabled = false;
+
+  const hemiLight = new THREE.HemisphereLight(0xc2ecff, 0x1e2c4a, 0.95);
+  scene.add(hemiLight);
+
+  const dirLight = new THREE.DirectionalLight(0xfff1d6, 2.2);
+  dirLight.position.set(12, 22, 14);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.set(1024, 1024);
+  dirLight.shadow.camera.near = 2;
+  dirLight.shadow.camera.far = 75;
+  dirLight.shadow.camera.left = -20;
+  dirLight.shadow.camera.right = 20;
+  dirLight.shadow.camera.top = 20;
+  dirLight.shadow.camera.bottom = -20;
+  dirLight.shadow.bias = -0.0005;
+  scene.add(dirLight);
+
+  function createTrackTexture() {
+    const c = document.createElement("canvas");
+    c.width = 512; c.height = 512;
+    const g = c.getContext("2d");
+    g.fillStyle = "#162749";
+    g.fillRect(0, 0, 512, 512);
+    g.strokeStyle = "rgba(92,225,214,0.14)";
+    g.lineWidth = 2;
+    for (let y = 0; y < 512; y += 64) {
+      g.beginPath(); g.moveTo(0, y); g.lineTo(512, y); g.stroke();
+    }
+    g.fillStyle = "#2dd4bf";
+    g.fillRect(168, 0, 6, 512);
+    g.fillRect(338, 0, 6, 512);
+    g.fillStyle = "#ffd34e";
+    g.fillRect(0, 0, 12, 512);
+    g.fillRect(500, 0, 12, 512);
+    g.strokeStyle = "rgba(255,211,78,0.22)";
+    g.lineWidth = 5;
+    [85, 256, 427].forEach(cx => {
+      for (let y = 64; y < 512; y += 128) {
+        g.beginPath(); g.moveTo(cx - 22, y + 18); g.lineTo(cx, y); g.lineTo(cx + 22, y + 18); g.stroke();
+      }
+    });
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(1, 16);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
+  // HIGH-CONTRAST, LARGE-FONT 3D ANSWER BILLBOARD TEXTURE (640 x 360, smart 3-line wrap)
+  function createBillboardTexture(text, laneIdx = 0) {
+    const c = document.createElement("canvas");
+    c.width = 640; c.height = 360;
+    const g = c.getContext("2d");
+
+    // Deep navy high-contrast backing
+    g.fillStyle = "#08152e";
+    g.fillRect(0, 0, 640, 360);
+
+    // Bright turquoise + gold double border
+    g.strokeStyle = "#5ce1d6";
+    g.lineWidth = 14;
+    g.strokeRect(10, 10, 620, 340);
+
+    // Top lane pill tag
+    const laneNames = ["◀ GAUCHE", "▲ CENTRE", "DROITE ▶"];
+    g.fillStyle = "#ffd34e";
+    g.fillRect(190, 22, 260, 48);
+    g.fillStyle = "#08152e";
+    g.font = "900 28px sans-serif";
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillText(laneNames[laneIdx] || "", 320, 47);
+
+    // Wrap answer text intelligently up to 3 lines with huge legible typography
+    const str = String(text || "").trim();
+    const maxWidth = 560;
+    let fontSize = str.length <= 8 ? 82 : str.length <= 16 ? 66 : str.length <= 28 ? 54 : 44;
+
+    const wrapLines = (size) => {
+      g.font = `900 ${size}px sans-serif`;
+      const words = str.split(/\s+/);
+      const lines = [];
+      let current = "";
+      for (const word of words) {
+        const test = current ? current + " " + word : word;
+        if (g.measureText(test).width <= maxWidth) {
+          current = test;
+        } else {
+          if (current) lines.push(current);
+          current = word;
+        }
+      }
+      if (current) lines.push(current);
+      return lines;
+    };
+
+    let lines = wrapLines(fontSize);
+    while (lines.length > 3 && fontSize > 34) {
+      fontSize -= 4;
+      lines = wrapLines(fontSize);
+    }
+    lines = lines.slice(0, 3);
+
+    g.fillStyle = "#ffffff";
+    g.font = `900 ${fontSize}px sans-serif`;
+    const lineHeight = fontSize * 1.18;
+    const centerY = 212;
+    const startY = centerY - ((lines.length - 1) * lineHeight) / 2;
+    lines.forEach((line, idx) => {
+      g.fillText(line, 320, startY + idx * lineHeight, maxWidth);
+    });
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    return tex;
+  }
+
+  function createContactShadow() {
+    const c = document.createElement("canvas");
+    c.width = 128; c.height = 128;
+    const g = c.getContext("2d");
+    const grad = g.createRadialGradient(64, 64, 6, 64, 64, 60);
+    grad.addColorStop(0, "rgba(0,0,0,0.58)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+    const tex = new THREE.CanvasTexture(c);
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.6, 2.6),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false })
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0.03;
+    return mesh;
+  }
+
+  // =========================================================================
+  // ARENA GROUP
+  // =========================================================================
+  const arenaGroup = new THREE.Group();
+  scene.add(arenaGroup);
+
+  const LANE_X = [-3.9, 0, 3.9];
+  const trackTex = createTrackTexture();
+  const trackMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(12.6, 0.6, 200),
+    new THREE.MeshStandardMaterial({ map: trackTex, roughness: 0.42, metalness: 0.25 })
+  );
+  trackMesh.position.set(0, -0.3, -78);
+  trackMesh.receiveShadow = true;
+  arenaGroup.add(trackMesh);
+
+  // Instanced Starfield
+  const starGeo = new THREE.OctahedronGeometry(0.18, 0);
+  const starMat = new THREE.MeshBasicMaterial({ color: 0xffeaa7 });
+  const starInst = new THREE.InstancedMesh(starGeo, starMat, 90);
+  const dummy = new THREE.Object3D();
+  for (let i = 0; i < 90; i++) {
+    dummy.position.set((Math.random() - 0.5) * 90, 4 + Math.random() * 28, -Math.random() * 140);
+    dummy.scale.setScalar(0.5 + Math.random() * 1.4);
+    dummy.updateMatrix();
+    starInst.setMatrixAt(i, dummy.matrix);
+  }
+  arenaGroup.add(starInst);
+
+  // Floating Sky-Islands
+  const sceneryIslands = [];
+  function createSkyIsland(side, zPos) {
+    const g = new THREE.Group();
+    const rock = new THREE.Mesh(
+      new THREE.ConeGeometry(2.6, 3.4, 7),
+      new THREE.MeshStandardMaterial({ color: 0x2a3f66, roughness: 0.85, metalness: 0.08 })
+    );
+    rock.rotation.x = Math.PI;
+    rock.position.y = -1.7;
+    g.add(rock);
+
+    const grass = new THREE.Mesh(
+      new THREE.CylinderGeometry(2.65, 2.5, 0.45, 7),
+      new THREE.MeshStandardMaterial({ color: 0x1e8f7b, roughness: 0.72, metalness: 0.05 })
+    );
+    grass.position.y = 0.1;
+    g.add(grass);
+
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.18, 0.26, 1.1, 6),
+      new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.9 })
+    );
+    trunk.position.set(0.3, 0.85, 0);
+    g.add(trunk);
+
+    const foliageMat = new THREE.MeshStandardMaterial({ color: 0x2ec4b6, roughness: 0.65 });
+    [1.7, 2.35, 2.95].forEach((y, idx) => {
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(1.15 - idx * 0.28, 1.15, 7), foliageMat);
+      cone.position.set(0.3, y, 0);
+      g.add(cone);
+    });
+
+    const crystal = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.5, 0),
+      new THREE.MeshStandardMaterial({ color: 0xffd34e, emissive: 0x664400, roughness: 0.2, metalness: 0.65 })
+    );
+    crystal.position.set(-1.1, 0.85, 0.4);
+    g.add(crystal);
+
+    g.position.set(side * (10.5 + Math.random() * 4.5), -0.5 + (Math.random() - 0.5) * 2.5, zPos);
+    arenaGroup.add(g);
+    return g;
+  }
+  for (let i = 0; i < 12; i++) {
+    sceneryIslands.push(createSkyIsland(i % 2 === 0 ? -1 : 1, -i * 14));
+  }
+
+  // Player Craft: Quizzy Hover-Star Craft
+  function buildPlayerCraft() {
+    const group = new THREE.Group();
+    const hullMat = new THREE.MeshStandardMaterial({ color: 0x008b94, roughness: 0.28, metalness: 0.55 });
+    const trimMat = new THREE.MeshStandardMaterial({ color: 0xffd34e, roughness: 0.25, metalness: 0.72 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x8ef9f3, roughness: 0.12, metalness: 0.15, emissive: 0x0c4a55 });
+    const glowMat = new THREE.MeshStandardMaterial({ color: 0xff6b4a, emissive: 0xff5a36, emissiveIntensity: 1.4, roughness: 0.2 });
+
+    const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.78, 2.1, 8), hullMat);
+    hull.rotation.x = Math.PI / 2;
+    hull.position.y = 0.85;
+    hull.castShadow = true;
+    group.add(hull);
+
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.85, 8), trimMat);
+    nose.rotation.x = -Math.PI / 2;
+    nose.position.set(0, 0.85, -1.45);
+    nose.castShadow = true;
+    group.add(nose);
+
+    const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.48, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), glassMat);
+    canopy.scale.set(0.95, 0.78, 1.45);
+    canopy.position.set(0, 1.15, -0.15);
+    group.add(canopy);
+
+    const wings = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.12, 0.85), hullMat);
+    wings.position.set(0, 0.75, 0.25);
+    wings.castShadow = true;
+    group.add(wings);
+
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.65, 0.8), trimMat);
+    fin.position.set(0, 1.38, 0.68);
+    group.add(fin);
+
+    [-0.55, 0.55].forEach(xOff => {
+      const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 0.7, 10), trimMat);
+      pod.rotation.x = Math.PI / 2;
+      pod.position.set(xOff, 0.74, 0.92);
+      group.add(pod);
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.55, 8), glowMat);
+      flame.rotation.x = Math.PI / 2;
+      flame.position.set(xOff, 0.74, 1.45);
+      group.add(flame);
+    });
+
+    group.add(createContactShadow());
+    return group;
+  }
+  const player = buildPlayerCraft();
+  player.position.set(0, 0, 4.5);
+  arenaGroup.add(player);
+
+  // Enlarged 3-Lane Question Gate Set
+  const gateGroup = new THREE.Group();
+  arenaGroup.add(gateGroup);
+  let activeGateRow = null;
+
+  function spawnGateRow(question, zStart) {
+    if (activeGateRow) {
+      gateGroup.remove(activeGateRow.group);
+    }
+    const rowGroup = new THREE.Group();
+    const pillarMat = new THREE.MeshStandardMaterial({ color: 0x203966, roughness: 0.35, metalness: 0.5 });
+    const crystalMat = new THREE.MeshStandardMaterial({ color: 0x5ce1d6, emissive: 0x0b5e63, roughness: 0.2, metalness: 0.5 });
+    const goldMat = new THREE.MeshStandardMaterial({ color: 0xffd34e, roughness: 0.28, metalness: 0.65 });
+
+    LANE_X.forEach((lx, idx) => {
+      const arch = new THREE.Group();
+      arch.position.set(lx, 0, 0);
+
+      [-1.72, 1.72].forEach(px => {
+        const p = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.24, 3.8, 8), pillarMat);
+        p.position.set(px, 1.9, 0);
+        p.castShadow = true;
+        arch.add(p);
+
+        const cap = new THREE.Mesh(new THREE.OctahedronGeometry(0.26, 0), crystalMat);
+        cap.position.set(px, 4.02, 0);
+        arch.add(cap);
+      });
+
+      const lintel = new THREE.Mesh(new THREE.BoxGeometry(3.75, 0.28, 0.36), goldMat);
+      lintel.position.set(0, 3.85, 0);
+      arch.add(lintel);
+
+      // Large, Crisp Answer Billboard (3.45 x 2.05)
+      const tex = createBillboardTexture(question.options[idx] || "", idx);
+      const board = new THREE.Mesh(
+        new THREE.PlaneGeometry(3.45, 2.05),
+        new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })
+      );
+      board.position.set(0, 2.55, 0.08);
+      arch.add(board);
+
+      const pad = new THREE.Mesh(
+        new THREE.PlaneGeometry(3.2, 1.6),
+        new THREE.MeshBasicMaterial({ color: 0x2dd4bf, transparent: true, opacity: 0.22 })
+      );
+      pad.rotation.x = -Math.PI / 2;
+      pad.position.set(0, 0.04, 0);
+      arch.add(pad);
+
+      rowGroup.add(arch);
+    });
+
+    rowGroup.position.z = zStart;
+    gateGroup.add(rowGroup);
+    activeGateRow = { group: rowGroup, question, resolved: false };
+  }
+
+  // Collectibles & Optional Asteroids
+  const propsGroup = new THREE.Group();
+  arenaGroup.add(propsGroup);
+  const collectibles = [];
+  const hazards = [];
+
+  function spawnMidWaveProps(zBase) {
+    for (let i = collectibles.length - 1; i >= 0; i--) {
+      if (collectibles[i].mesh.position.z > 14) {
+        propsGroup.remove(collectibles[i].mesh);
+        collectibles.splice(i, 1);
+      }
+    }
+    for (let i = hazards.length - 1; i >= 0; i--) {
+      if (hazards[i].mesh.position.z > 14) {
+        propsGroup.remove(hazards[i].mesh);
+        hazards.splice(i, 1);
+      }
+    }
+    const gemLane = Math.floor(Math.random() * 3);
+    const hazLane = (gemLane + 1 + Math.floor(Math.random() * 2)) % 3;
+
+    const gemG = new THREE.Group();
+    const core = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.46, 0),
+      new THREE.MeshStandardMaterial({ color: 0xffd34e, emissive: 0x805500, roughness: 0.18, metalness: 0.78 })
+    );
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.68, 0.06, 8, 24),
+      new THREE.MeshStandardMaterial({ color: 0x5ce1d6, emissive: 0x0b5e63, roughness: 0.25, metalness: 0.6 })
+    );
+    gemG.add(core, ring);
+    gemG.position.set(LANE_X[gemLane], 1.05, zBase + 22);
+    propsGroup.add(gemG);
+    collectibles.push({ mesh: gemG, lane: gemLane, taken: false });
+
+    if (getPreset().hasAsteroids) {
+      const hazG = new THREE.Group();
+      const rock = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.62, 0),
+        new THREE.MeshStandardMaterial({ color: 0x5c3645, roughness: 0.88, metalness: 0.12 })
+      );
+      const warnRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.85, 1.08, 24),
+        new THREE.MeshBasicMaterial({ color: 0xff6b4a, side: THREE.DoubleSide, transparent: true, opacity: 0.78 })
+      );
+      warnRing.rotation.x = -Math.PI / 2;
+      warnRing.position.y = -0.82;
+      hazG.add(rock, warnRing);
+      hazG.position.set(LANE_X[hazLane], 0.92, zBase + 34);
+      propsGroup.add(hazG);
+      hazards.push({ mesh: hazG, warnRing, lane: hazLane, hit: false });
+    }
+  }
+
+  // Particle Pool
+  const particlePool = [];
+  const pGeo = new THREE.OctahedronGeometry(0.14, 0);
+  for (let i = 0; i < 60; i++) {
+    const m = new THREE.Mesh(pGeo, new THREE.MeshBasicMaterial({ color: 0xffd34e }));
+    m.visible = false;
+    arenaGroup.add(m);
+    particlePool.push({ mesh: m, vel: new THREE.Vector3(), life: 0, maxLife: 0.6 });
+  }
+  function burstParticles(origin, hexColor, count = 18) {
+    let spawned = 0;
+    for (const p of particlePool) {
+      if (p.life <= 0) {
+        p.mesh.position.copy(origin);
+        p.mesh.material.color.setHex(hexColor);
+        p.mesh.visible = true;
+        p.vel.set((Math.random() - 0.5) * 10, 2.5 + Math.random() * 6, (Math.random() - 0.5) * 10);
+        p.life = 0.55 + Math.random() * 0.25;
+        p.maxLife = p.life;
+        if (++spawned >= count) break;
+      }
+    }
+  }
+
+  // =========================================================================
+  // 3D LABO EXPLORER GROUP
+  // =========================================================================
+  const explorerGroup = new THREE.Group();
+  explorerGroup.visible = false;
+  scene.add(explorerGroup);
+  const explorerModels = {};
+
+  function buildSolarModel() {
+    const root = new THREE.Group();
+    const sun = new THREE.Mesh(
+      new THREE.SphereGeometry(1.55, 28, 24),
+      new THREE.MeshStandardMaterial({ color: 0xffc83d, emissive: 0xff8c00, emissiveIntensity: 1.5, roughness: 0.3 })
+    );
+    const corona = new THREE.Mesh(
+      new THREE.SphereGeometry(1.82, 24, 20),
+      new THREE.MeshBasicMaterial({ color: 0xffd34e, transparent: true, opacity: 0.16 })
+    );
+    root.add(sun, corona);
+
+    const specs = [
+      { r: 2.7, size: 0.25, color: 0xb0b8c9, speed: 1.4 },
+      { r: 3.7, size: 0.38, color: 0xe6a15c, speed: 1.05 },
+      { r: 4.9, size: 0.46, color: 0x2b8be6, speed: 0.82, moon: true },
+      { r: 6.1, size: 0.34, color: 0xd95338, speed: 0.68 },
+      { r: 7.8, size: 0.82, color: 0xd8a878, speed: 0.45 },
+      { r: 9.8, size: 0.68, color: 0xe8d08e, speed: 0.32, rings: true }
+    ];
+    root.userData.orbits = [];
+    specs.forEach((sp, i) => {
+      const orbitRing = new THREE.Mesh(
+        new THREE.RingGeometry(sp.r - 0.03, sp.r + 0.03, 64),
+        new THREE.MeshBasicMaterial({ color: 0x5ce1d6, side: THREE.DoubleSide, transparent: true, opacity: 0.28 })
+      );
+      orbitRing.rotation.x = -Math.PI / 2;
+      root.add(orbitRing);
+
+      const pivot = new THREE.Group();
+      pivot.rotation.y = i * 1.2;
+      const planet = new THREE.Mesh(
+        new THREE.SphereGeometry(sp.size, 22, 18),
+        new THREE.MeshStandardMaterial({ color: sp.color, roughness: 0.55, metalness: 0.1 })
+      );
+      planet.position.x = sp.r;
+      pivot.add(planet);
+
+      if (sp.moon) {
+        const moon = new THREE.Mesh(
+          new THREE.SphereGeometry(0.13, 12, 12),
+          new THREE.MeshStandardMaterial({ color: 0xd9e1ec, roughness: 0.85 })
+        );
+        moon.position.set(sp.r + 0.75, 0.15, 0);
+        pivot.add(moon);
+      }
+      if (sp.rings) {
+        const satRing = new THREE.Mesh(
+          new THREE.RingGeometry(sp.size * 1.35, sp.size * 2.15, 40),
+          new THREE.MeshStandardMaterial({ color: 0xf0d69b, side: THREE.DoubleSide, roughness: 0.5, transparent: true, opacity: 0.82 })
+        );
+        satRing.position.x = sp.r;
+        satRing.rotation.x = Math.PI / 2.6;
+        pivot.add(satRing);
+      }
+      root.add(pivot);
+      root.userData.orbits.push({ pivot, speed: sp.speed });
+    });
+    return root;
+  }
+
+  function buildMoleculeModel() {
+    const root = new THREE.Group();
+    const oxy = new THREE.Mesh(
+      new THREE.SphereGeometry(1.25, 28, 24),
+      new THREE.MeshStandardMaterial({ color: 0xff5a45, roughness: 0.22, metalness: 0.25 })
+    );
+    root.add(oxy);
+
+    const hMat = new THREE.MeshStandardMaterial({ color: 0xe6f4ff, roughness: 0.2, metalness: 0.35 });
+    const bondMat = new THREE.MeshStandardMaterial({ color: 0x5ce1d6, roughness: 0.3, metalness: 0.55 });
+    const halfAngle = (104.5 * Math.PI) / 360;
+    [-1, 1].forEach(sign => {
+      const bx = Math.sin(halfAngle) * 2.65 * sign;
+      const by = -Math.cos(halfAngle) * 2.65;
+      const hAtom = new THREE.Mesh(new THREE.SphereGeometry(0.76, 24, 20), hMat);
+      hAtom.position.set(bx, by, 0);
+      root.add(hAtom);
+
+      const bond = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 2.5, 14), bondMat);
+      bond.position.set(bx * 0.5, by * 0.5, 0);
+      bond.rotation.z = sign * halfAngle;
+      root.add(bond);
+    });
+
+    root.userData.rings = [];
+    [0, 1.05, 2.1].forEach((tilt, idx) => {
+      const rPivot = new THREE.Group();
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(3.4, 0.04, 10, 64),
+        new THREE.MeshBasicMaterial({ color: 0xffd34e, transparent: true, opacity: 0.45 })
+      );
+      const elec = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 12, 12),
+        new THREE.MeshStandardMaterial({ color: 0xffd34e, emissive: 0xffa800, emissiveIntensity: 1.3 })
+      );
+      elec.position.x = 3.4;
+      rPivot.add(ring, elec);
+      rPivot.rotation.set(tilt, idx * 0.8, 0);
+      root.add(rPivot);
+      root.userData.rings.push(rPivot);
+    });
+    return root;
+  }
+
+  function buildGeometryModel() {
+    const root = new THREE.Group();
+    const plinth = new THREE.Mesh(
+      new THREE.CylinderGeometry(4.8, 5.1, 0.45, 36),
+      new THREE.MeshStandardMaterial({ color: 0x182b4d, roughness: 0.4, metalness: 0.35 })
+    );
+    plinth.position.y = -0.25;
+    root.add(plinth);
+
+    const rim = new THREE.Mesh(
+      new THREE.TorusGeometry(4.8, 0.07, 10, 48),
+      new THREE.MeshStandardMaterial({ color: 0x5ce1d6, emissive: 0x0b5e63, roughness: 0.25 })
+    );
+    rim.rotation.x = Math.PI / 2;
+    root.add(rim);
+
+    const solids = [
+      { mesh: new THREE.Mesh(new THREE.BoxGeometry(1.75, 1.75, 1.75), new THREE.MeshStandardMaterial({ color: 0x2dd4bf, roughness: 0.28, metalness: 0.3 })), pos: [-2.2, 0.9, -1.6] },
+      { mesh: new THREE.Mesh(new THREE.ConeGeometry(1.15, 2.0, 4), new THREE.MeshStandardMaterial({ color: 0xffd34e, roughness: 0.3, metalness: 0.35 })), pos: [2.2, 1.0, -1.6] },
+      { mesh: new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 1.9, 24), new THREE.MeshStandardMaterial({ color: 0xff6b4a, roughness: 0.26, metalness: 0.25 })), pos: [-2.1, 0.95, 1.8] },
+      { mesh: new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.05, 1.85, 3), new THREE.MeshStandardMaterial({ color: 0x8b6dff, roughness: 0.28, metalness: 0.3 })), pos: [2.1, 0.95, 1.8] }
+    ];
+    root.userData.solids = [];
+    solids.forEach(s => {
+      s.mesh.position.set(...s.pos);
+      const wire = new THREE.LineSegments(
+        new THREE.EdgesGeometry(s.mesh.geometry),
+        new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 })
+      );
+      s.mesh.add(wire);
+      root.add(s.mesh);
+      root.userData.solids.push(s.mesh);
+    });
+    return root;
+  }
+
+  explorerModels.solar = buildSolarModel();
+  explorerModels.molecule = buildMoleculeModel();
+  explorerModels.geometry = buildGeometryModel();
+  Object.values(explorerModels).forEach(m => { m.visible = false; explorerGroup.add(m); });
+  explorerModels.solar.visible = true;
+
+  let activeExplorerKey = "solar";
+  const EXPLORER_META = {
+    solar: {
+      title: "🪐 Système Solaire 3D",
+      caption: "Observe les planètes en orbite autour du Soleil, la Lune autour de la Terre et les anneaux de Saturne."
+    },
+    molecule: {
+      title: "💧 Molécule d'Eau (H₂O)",
+      caption: "1 atome d'Oxygène (rouge) relié à 2 atomes d'Hydrogène (blanc) formant un angle précis de 104,5°."
+    },
+    geometry: {
+      title: "📐 Solides Géométriques 3D",
+      caption: "Compare les faces, arêtes et sommets du Cube, de la Pyramide, du Cylindre et du Prisme triangulaire."
+    }
+  };
+
+  // =========================================================================
+  // GAME STATE MACHINE & 60FPS LOOP
+  // =========================================================================
+  let mode = "TITLE";
+  let questions = loadQuestions();
+  let qIndex = 0;
+  let score = 0, lives = 4, maxLives = 4, combo = 1, maxCombo = 1, correctCount = 0;
+  let targetLane = 1, currentX = 0;
+  let boostTimer = 0, hitstopTimer = 0, shakeMag = 0;
+  let startTimeMs = 0, worldTime = 0;
+  const scratchTarget = new THREE.Vector3();
+  const scratchCamPos = new THREE.Vector3();
+
+  function updateHud() {
+    hudScore.textContent = "★ " + score;
+    hudCombo.textContent = "x" + combo;
+    hudLives.textContent = "♥".repeat(Math.max(0, lives)) + "♡".repeat(Math.max(0, maxLives - lives));
+  }
+
+  function setQuestionHud(q) {
+    const preset = getPreset();
+    qSubject.textContent = `${q.subject} • ${preset.label} • ${qIndex + 1}/${questions.length}`;
+    qPrompt.textContent = q.prompt;
+    updateAnswerCardsContent(q);
+  }
+
+  function syncUiVisibility() {
+    titleScreen.classList.toggle("hidden", mode !== "TITLE");
+    gameHud.classList.toggle("hidden", mode !== "PLAYING");
+    explorerTop.classList.toggle("hidden", mode !== "EXPLORER");
+    explorerDock.classList.toggle("hidden", mode !== "EXPLORER");
+    modalOverlay.classList.toggle("hidden", mode !== "PAUSED" && mode !== "VICTORY" && mode !== "GAMEOVER");
+    arenaGroup.visible = mode !== "EXPLORER";
+    explorerGroup.visible = mode === "EXPLORER";
+    controls.enabled = mode === "EXPLORER";
+  }
+
+  function startNewRun() {
+    const preset = getPreset();
+    questions = loadQuestions();
+    qIndex = 0; score = 0; lives = preset.lives; maxLives = preset.lives;
+    combo = 1; maxCombo = 1; correctCount = 0;
+    targetLane = 1; currentX = 0; boostTimer = 0; hitstopTimer = 0; shakeMag = 0;
+    startTimeMs = Date.now();
+    player.position.set(0, 0, 4.5);
+    player.scale.set(1, 1, 1);
+    updateAnswerCardsSelection(1);
+    setQuestionHud(questions[0]);
+    spawnGateRow(questions[0], preset.spawnZ);
+    spawnMidWaveProps(preset.spawnZ);
+    updateHud();
+    mode = "PLAYING";
+    syncUiVisibility();
+    sfx.playBoost();
+  }
+
+  function finishRun(victory) {
+    mode = victory ? "VICTORY" : "GAMEOVER";
+    const elapsedSec = Math.max(1, Math.round((Date.now() - startTimeMs) / 1000));
+    const preset = getPreset();
+    modalTitle.textContent = victory ? "🏆 Victoire 3D !" : "🚀 Fin de mission";
+    modalSub.textContent = victory
+      ? `Super pilotage en ${currentConfig.subject} (${preset.label}) ! Score sauvegardé dans la base SQL.`
+      : "Bravo pour ton effort ! Retente une partie pour battre ton record.";
+    statScore.textContent = String(score);
+    statCorrect.textContent = `${correctCount}/${questions.length}`;
+    statCombo.textContent = `x${maxCombo}`;
+    btnModalPrimary.textContent = "↻ Rejouer";
+    btnModalPrimary.onclick = startNewRun;
+    syncUiVisibility();
+    if (victory) sfx.playVictory();
+    try {
+      if (window.QuizzyGameBridge && typeof window.QuizzyGameBridge.onGameFinished === "function") {
+        window.QuizzyGameBridge.onGameFinished(
+          score, correctCount, questions.length, maxCombo, elapsedSec,
+          currentConfig.subject || questions[0]?.subject || "Général"
+        );
+      }
+    } catch (e) { console.warn("Bridge error", e); }
+  }
+
+  function openExplorer(modelKey = "solar") {
+    mode = "EXPLORER";
+    activeExplorerKey = modelKey;
+    Object.entries(explorerModels).forEach(([k, obj]) => { obj.visible = k === modelKey; });
+    document.querySelectorAll(".dock-chip").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.model === modelKey);
+    });
+    dockModelTitle.textContent = EXPLORER_META[modelKey].title;
+    dockCaption.textContent = EXPLORER_META[modelKey].caption;
+    camera.position.set(0, 6.2, 13.8);
+    controls.target.set(0, 0.5, 0);
+    controls.update();
+    syncUiVisibility();
+  }
+
+  engineStartRun = startNewRun;
+  engineOpenExplorer = openExplorer;
+
+  function setLane(newLane) {
+    if (mode !== "PLAYING") return;
+    targetLane = Math.max(0, Math.min(2, newLane));
+    updateAnswerCardsSelection(targetLane);
+    sfx.tone(420 + targetLane * 90, 0.06, "sine", 0.07);
+  }
+  function steer(dir) {
+    setLane(targetLane + dir);
+  }
+  function triggerBoost() {
+    if (mode !== "PLAYING" || boostTimer > 0.1) return;
+    boostTimer = 0.75;
+    player.scale.set(0.86, 1.15, 1.2);
+    sfx.playBoost();
+  }
+
+  // Controls & Clickable Answer Cards
+  document.getElementById("btn-start-game").onclick = startNewRun;
+  document.getElementById("btn-open-explorer").onclick = () => openExplorer("solar");
+  document.getElementById("btn-explorer-back").onclick = () => { mode = "TITLE"; syncUiVisibility(); };
+  document.getElementById("btn-left").onclick = () => steer(-1);
+  document.getElementById("btn-right").onclick = () => steer(1);
+  document.getElementById("btn-boost").onclick = triggerBoost;
+  answerCards.forEach((card, idx) => {
+    card.onclick = () => setLane(idx);
+  });
+  document.getElementById("btn-pause").onclick = () => {
+    if (mode !== "PLAYING") return;
+    mode = "PAUSED";
+    modalTitle.textContent = "⏸ Pause";
+    modalSub.textContent = "Prends ton souffle puis reprends le vol !";
+    statScore.textContent = String(score);
+    statCorrect.textContent = `${correctCount}/${questions.length}`;
+    statCombo.textContent = `x${maxCombo}`;
+    btnModalPrimary.textContent = "▶ Reprendre";
+    btnModalPrimary.onclick = () => { mode = "PLAYING"; syncUiVisibility(); };
+    syncUiVisibility();
+  };
+  btnModalSecondary.onclick = () => { mode = "TITLE"; syncUiVisibility(); };
+  btnMute.onclick = () => {
+    sfx.muted = !sfx.muted;
+    btnMute.textContent = sfx.muted ? "🔇" : "🔊";
+  };
+
+  let dockCollapsed = false;
+  btnToggleDock.onclick = () => {
+    dockCollapsed = !dockCollapsed;
+    dockBody.classList.toggle("hidden", dockCollapsed);
+    btnToggleDock.textContent = dockCollapsed ? "Ouvrir" : "Réduire";
+  };
+  document.querySelectorAll(".dock-chip").forEach(btn => {
+    btn.onclick = () => openExplorer(btn.dataset.model);
+  });
+
+  // Swipe gestures on canvas
+  let touchStartX = null, touchStartY = null;
+  renderer.domElement.addEventListener("pointerdown", e => {
+    if (mode !== "PLAYING") return;
+    touchStartX = e.clientX; touchStartY = e.clientY;
+  });
+  renderer.domElement.addEventListener("pointerup", e => {
+    if (mode !== "PLAYING" || touchStartX === null) return;
+    const dx = e.clientX - touchStartX;
+    const dy = e.clientY - touchStartY;
+    if (Math.abs(dx) > 28 && Math.abs(dx) > Math.abs(dy)) {
+      steer(dx > 0 ? 1 : -1);
+    } else if (dy < -42) {
+      triggerBoost();
+    } else if (Math.abs(dx) < 16 && Math.abs(dy) < 16) {
+      const third = window.innerWidth / 3;
+      if (e.clientX < third) setLane(0);
+      else if (e.clientX > third * 2) setLane(2);
+      else setLane(1);
+    }
+    touchStartX = null;
+  });
+
+  const heldKeys = new Set();
+  window.addEventListener("keydown", e => {
+    if (heldKeys.has(e.code)) return;
+    heldKeys.add(e.code);
+    if (mode === "TITLE" && (e.code === "Enter" || e.code === "Space")) startNewRun();
+    else if (mode === "PLAYING") {
+      if (e.code === "ArrowLeft" || e.code === "KeyA") steer(-1);
+      if (e.code === "ArrowRight" || e.code === "KeyD") steer(1);
+      if (e.code === "Digit1") setLane(0);
+      if (e.code === "Digit2") setLane(1);
+      if (e.code === "Digit3") setLane(2);
+      if (e.code === "Space") triggerBoost();
+      if (e.code === "Escape") document.getElementById("btn-pause").click();
+    } else if (mode === "PAUSED" && e.code === "Escape") {
+      mode = "PLAYING"; syncUiVisibility();
+    }
+  });
+  window.addEventListener("keyup", e => heldKeys.delete(e.code));
+  window.addEventListener("blur", () => heldKeys.clear());
+
+  window.addEventListener("resize", () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  syncUiVisibility();
+  refreshTitleMissionBadge();
+  spawnGateRow(questions[0], -36);
+
+  let lastFrame = performance.now();
+  function animate(now) {
+    requestAnimationFrame(animate);
+    const rawDt = (now - lastFrame) / 1000;
+    lastFrame = now;
+    const dt = Math.min(rawDt, 0.05);
+    worldTime += dt;
+
+    if (hitstopTimer > 0) {
+      hitstopTimer -= dt;
+      renderer.render(scene, camera);
+      return;
+    }
+
+    for (const p of particlePool) {
+      if (p.life > 0) {
+        p.life -= dt;
+        p.vel.y -= 14 * dt;
+        p.mesh.position.addScaledVector(p.vel, dt);
+        p.mesh.rotation.x += 5 * dt;
+        p.mesh.rotation.y += 4 * dt;
+        p.mesh.scale.setScalar(Math.max(0.01, p.life / p.maxLife));
+        if (p.life <= 0) p.mesh.visible = false;
+      }
+    }
+
+    if (mode === "TITLE") {
+      const angle = worldTime * 0.24;
+      camera.position.set(Math.sin(angle) * 9.5, 4.9 + Math.sin(worldTime * 0.7) * 0.4, 4.5 + Math.cos(angle) * 9.5);
+      scratchTarget.set(0, 1.4, 1.5);
+      camera.lookAt(scratchTarget);
+      player.position.y = Math.sin(worldTime * 2.4) * 0.14;
+      player.rotation.z = Math.sin(worldTime * 1.3) * 0.07;
+      trackTex.offset.y -= dt * 0.35;
+    } else if (mode === "EXPLORER") {
+      if (activeExplorerKey === "solar") {
+        explorerModels.solar.userData.orbits.forEach(o => { o.pivot.rotation.y += dt * o.speed * 0.55; });
+      } else if (activeExplorerKey === "molecule") {
+        explorerModels.molecule.rotation.y += dt * 0.42;
+        explorerModels.molecule.userData.rings.forEach((r, idx) => { r.rotation.z += dt * (1.1 + idx * 0.3); });
+      } else if (activeExplorerKey === "geometry") {
+        explorerModels.geometry.rotation.y += dt * 0.30;
+        explorerModels.geometry.userData.solids.forEach((s, idx) => { s.rotation.y += dt * (0.45 + idx * 0.12); });
+      }
+      controls.update();
+    } else if (mode === "PLAYING") {
+      const preset = getPreset();
+      if (boostTimer > 0) boostTimer = Math.max(0, boostTimer - dt);
+
+      // Gentle Reading-Assist slow-down as gates enter comfortable reading distance
+      let readingAssist = 1.0;
+      if (activeGateRow && !activeGateRow.resolved) {
+        const gz = activeGateRow.group.position.z;
+        if (gz > -34 && gz < -4) readingAssist = preset.assistFactor;
+      }
+      const speed = (preset.baseSpeed + qIndex * preset.speedStep) * readingAssist * (boostTimer > 0 ? 1.38 : 1.0);
+      trackTex.offset.y -= dt * (speed * 0.072);
+
+      // Smooth damped lane movement
+      const desiredX = LANE_X[targetLane];
+      const prevX = currentX;
+      currentX += (desiredX - currentX) * (1 - Math.exp(-13 * dt));
+      const vx = (currentX - prevX) / Math.max(dt, 0.001);
+      player.position.x = currentX;
+      player.position.y = Math.sin(worldTime * 5.2) * 0.09;
+      player.rotation.z = THREE.MathUtils.clamp(-vx * 0.028, -0.34, 0.34);
+      const scaleLerp = 1 - Math.exp(-10 * dt);
+      player.scale.x += (1 - player.scale.x) * scaleLerp;
+      player.scale.y += (1 - player.scale.y) * scaleLerp;
+      player.scale.z += (1 - player.scale.z) * scaleLerp;
+
+      sceneryIslands.forEach(isl => {
+        isl.position.z += speed * dt;
+        if (isl.position.z > 20) isl.position.z -= 168;
+      });
+
+      collectibles.forEach(c => {
+        c.mesh.position.z += speed * dt;
+        c.mesh.rotation.y += 2.4 * dt;
+        if (!c.taken && Math.abs(c.mesh.position.z - player.position.z) < 1.4 && Math.abs(c.mesh.position.x - player.position.x) < 1.4) {
+          c.taken = true;
+          c.mesh.visible = false;
+          score += Math.round(30 * combo * preset.multiplier);
+          player.scale.set(1.16, 1.16, 0.92);
+          burstParticles(c.mesh.position, 0xffd34e, 14);
+          sfx.playGem();
+          updateHud();
+        }
+      });
+
+      hazards.forEach(h => {
+        h.mesh.position.z += speed * dt;
+        h.mesh.rotation.x += 1.4 * dt;
+        h.mesh.rotation.y += 1.0 * dt;
+        h.warnRing.material.opacity = 0.45 + Math.sin(worldTime * 9) * 0.35;
+        if (!h.hit && Math.abs(h.mesh.position.z - player.position.z) < 1.35 && Math.abs(h.mesh.position.x - player.position.x) < 1.25) {
+          h.hit = true;
+          h.mesh.visible = false;
+          combo = 1;
+          shakeMag = 0.48;
+          hitstopTimer = 0.04;
+          burstParticles(h.mesh.position, 0xff6b4a, 20);
+          sfx.playHit();
+          showToast("Astéroïde ! Combo réinitialisé", false);
+          updateHud();
+        }
+      });
+
+      if (activeGateRow) {
+        activeGateRow.group.position.z += speed * dt;
+        if (!activeGateRow.resolved && activeGateRow.group.position.z >= player.position.z - 0.5) {
+          activeGateRow.resolved = true;
+          const chosenLane = Math.abs(currentX - LANE_X[0]) < 1.95 ? 0 : Math.abs(currentX - LANE_X[2]) < 1.95 ? 2 : 1;
+          const isRight = chosenLane === activeGateRow.question.correct;
+          if (isRight) {
+            correctCount++;
+            const pts = Math.round(100 * combo * preset.multiplier);
+            score += pts;
+            combo++;
+            maxCombo = Math.max(maxCombo, combo);
+            player.scale.set(1.22, 1.16, 0.88);
+            burstParticles(player.position, 0x5ce1d6, 26);
+            sfx.playCorrect();
+            showToast(`Bonne réponse ! +${pts} pts`, true);
+          } else {
+            lives--;
+            combo = 1;
+            shakeMag = 0.65;
+            hitstopTimer = 0.05;
+            burstParticles(player.position, 0xff6b4a, 24);
+            sfx.playHit();
+            showToast("Mauvaise porte ! Lis bien la prochaine", false);
+          }
+          updateHud();
+
+          qIndex++;
+          if (lives <= 0) {
+            finishRun(false);
+          } else if (qIndex >= questions.length) {
+            finishRun(true);
+          } else {
+            setQuestionHud(questions[qIndex]);
+            spawnGateRow(questions[qIndex], preset.spawnZ);
+            spawnMidWaveProps(preset.spawnZ);
+          }
+        }
+      }
+
+      shakeMag = Math.max(0, shakeMag - dt * 2.4);
+      const sx = (Math.random() - 0.5) * shakeMag;
+      const sy = (Math.random() - 0.5) * shakeMag;
+      scratchCamPos.set(currentX * 0.42 + sx, 5.2 + sy, 12.2 + (boostTimer > 0 ? 0.9 : 0));
+      camera.position.lerp(scratchCamPos, 1 - Math.exp(-7 * dt));
+      scratchTarget.set(currentX * 0.32, 1.9, -14);
+      camera.lookAt(scratchTarget);
+    }
+
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(animate);
+}
+
+// Kotlin -> WebView dynamic mission configuration bridge
+window.configureQuizzy3D = (payloadJson) => {
+  try {
+    const cfg = JSON.parse(payloadJson);
+    if (cfg.subject) currentConfig.subject = String(cfg.subject);
+    if (cfg.difficulty && DIFFICULTY_PRESETS[cfg.difficulty]) {
+      currentConfig.difficulty = cfg.difficulty;
+    }
+    if (Array.isArray(cfg.questions) && cfg.questions.length > 0) {
+      window.QUIZZY_QUESTIONS = cfg.questions;
+    }
+    refreshTitleMissionBadge();
+    if (cfg.autoStart === true) {
+      engineStartRun();
+    } else if (cfg.openExplorer === true) {
+      engineOpenExplorer("solar");
+    }
+  } catch (e) {
+    console.warn("configureQuizzy3D error", e);
+  }
+};
+
+window.refreshQuizzyQuestions = (jsonStr) => {
+  try {
+    const parsed = JSON.parse(jsonStr);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      window.QUIZZY_QUESTIONS = parsed;
+      refreshTitleMissionBadge();
+    }
+  } catch (_) {}
+};
+</script>
+</body>
+</html>

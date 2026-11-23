@@ -9,7 +9,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -21,13 +20,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -36,34 +38,27 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.ui.theme.QuizzyTheme
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-private val BrandBookNavy = Color(0xFF0B2E7A)
-private val BrandBookNavyDark = Color(0xFF5D87F0)
-private val BrandPageTurquoise = Color(0xFF0AD2C0)
-private val BrandPageTurquoiseSoft = Color(0xFF7BEAE0)
-private val BrandPageCream = Color(0xFFFFFBF2)
-private val BrandStarCoral = Color(0xFFFF644E)
-
 /**
- * Displays the official Quizzy transparent wordmark logo, automatically switching
- * between light mode and dark mode variants.
+ * Displays the official Quizzy wordmark logo, automatically choosing the dark-mode
+ * or light-mode version for high contrast against the active theme surface.
  */
 @Composable
 fun QuizzyWordmarkLogo(
     modifier: Modifier = Modifier,
-    height: Dp = 46.dp,
-    forceDarkVariant: Boolean? = null
+    height: Dp = 44.dp,
+    forceDarkSurface: Boolean = false
 ) {
-    val useDarkLogo = forceDarkVariant
-        ?: (isSystemInDarkTheme() || MaterialTheme.colorScheme.background.luminance() < 0.5f)
-    val resId = if (useDarkLogo) R.drawable.logo_quizzy_dark else R.drawable.logo_quizzy_light
+    val useDarkAsset = forceDarkSurface || QuizzyTheme.colors.isDark
+    val resId = if (useDarkAsset) R.drawable.logo_quizzy_dark else R.drawable.logo_quizzy_light
 
     Image(
         painter = painterResource(id = resId),
-        contentDescription = "Logo Quizzy",
+        contentDescription = "Quizzy",
         contentScale = ContentScale.Fit,
         modifier = modifier
             .height(height)
@@ -72,46 +67,65 @@ fun QuizzyWordmarkLogo(
 }
 
 /**
- * Modern animated page-turning book loader tailored to Quizzy's art direction:
- * deep navy open book cover, turquoise pages, two staggered 3D-arc flipping pages,
- * and a bobbing coral star with 3 pulsing sparkle rays.
+ * Premium 3D open-book page-turning loader for Quizzy.
+ * Features a beveled hardcover spine, layered paper stacks on both sides,
+ * realistic curved Bezier flipping pages with dynamic lighting & miniature ink lines,
+ * warm ambient glow, and subtle academic gold sparkles.
  */
 @Composable
 fun QuizzyBookLoader(
     modifier: Modifier = Modifier,
-    size: Dp = 88.dp,
+    size: Dp = 92.dp,
     message: String? = null
 ) {
-    val isDark = isSystemInDarkTheme() || MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val coverColor = if (isDark) BrandBookNavyDark else BrandBookNavy
-    val pageSheetColor = if (isDark) Color(0xFFE9F4FF) else BrandPageCream
+    val qColors = QuizzyTheme.colors
+    val isDark = qColors.isDark
+    val transition = rememberInfiniteTransition(label = "quizzy_book_loader_v2")
 
-    val transition = rememberInfiniteTransition(label = "quizzy_book_loader")
-
-    // Primary flipping page progress: 0f (right) -> 1f (left)
-    val page1Progress by transition.animateFloat(
+    // Smooth continuous page turn cycle (0 -> 1)
+    val pagePhase by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 1280, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "book_page_1"
+        label = "book_page_phase"
     )
 
-    // Secondary staggered flipping page (half cycle offset)
-    val page2Progress = (page1Progress + 0.5f) % 1f
+    // Gentle levitation breathing for the book
+    val floatBob by transition.animateFloat(
+        initialValue = -1f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "book_float_bob"
+    )
 
-    // Star gentle vertical float & sparkle pulse
-    val starPulse by transition.animateFloat(
+    // Sparkle shimmer phase
+    val sparklePhase by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
+            animation = tween(durationMillis = 1800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
         ),
-        label = "star_pulse"
+        label = "book_sparkle_phase"
     )
+
+    val coverPrimary = if (isDark) Color(0xFF1F4D99) else Color(0xFF0E347C)
+    val coverHighlight = if (isDark) Color(0xFF38BDF8) else Color(0xFF1A56B8)
+    val coverRim = if (isDark) Color(0xFF0C224A) else Color(0xFF071E4D)
+    val pageFrontBright = if (isDark) Color(0xFFF3F7FF) else Color(0xFFFFFEFA)
+    val pageWarmCream = if (isDark) Color(0xFFDCE7FA) else Color(0xFFF4EFE4)
+    val pageShade = if (isDark) Color(0xFFB3C7E6) else Color(0xFFDCD3C2)
+    val pageLineInk = if (isDark) Color(0xFF7B94B8) else Color(0xFFB6C2D4)
+    val accentTeal = if (isDark) Color(0xFF2DD4BF) else Color(0xFF0AD2C0)
+    val accentGold = Color(0xFFFFD34E)
+    val accentCoral = Color(0xFFFF6B57)
+    val ribbonRed = if (isDark) Color(0xFFFF8066) else Color(0xFFE94E3D)
 
     Column(
         modifier = modifier.testTag("quizzy_book_loader"),
@@ -121,152 +135,201 @@ fun QuizzyBookLoader(
         Canvas(modifier = Modifier.size(size)) {
             val w = this.size.width
             val h = this.size.height
-            val cx = w * 0.50f
-            val spineY = h * 0.80f
-            val spineTopY = h * 0.50f
-            val bookHalfW = w * 0.36f
-            val pageH = h * 0.30f
+            val cx = w / 2f
+            val bobOffset = floatBob * h * 0.022f
+            val baseY = h * 0.78f + bobOffset
+            val topY = h * 0.28f + bobOffset
+            val halfSpan = w * 0.37f
+            val spineArch = h * 0.065f
 
-            // 1. Soft grounding shadow under the book
+            // 1. Soft ambient knowledge halo & ground shadow
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        accentTeal.copy(alpha = if (isDark) 0.24f else 0.16f),
+                        accentGold.copy(alpha = if (isDark) 0.10f else 0.08f),
+                        Color.Transparent
+                    ),
+                    center = Offset(cx, h * 0.50f),
+                    radius = w * 0.48f
+                ),
+                radius = w * 0.48f,
+                center = Offset(cx, h * 0.50f)
+            )
+            // Soft cast shadow under floating book
+            val shadowScale = 1f - floatBob * 0.04f
             drawOval(
-                color = coverColor.copy(alpha = 0.11f),
-                topLeft = Offset(cx - bookHalfW * 0.92f, h * 0.87f),
-                size = androidx.compose.ui.geometry.Size(bookHalfW * 1.84f, h * 0.08f)
+                color = (if (isDark) Color.Black else Color(0xFF0B2E7A)).copy(alpha = if (isDark) 0.36f else 0.14f),
+                topLeft = Offset(cx - halfSpan * 0.92f * shadowScale, h * 0.85f),
+                size = Size(halfSpan * 1.84f * shadowScale, h * 0.075f)
             )
 
-            // 2. Deep Navy Open Book Cover Cradle (mirrors the 3rd Quizzy app icon)
-            val coverPath = Path().apply {
-                moveTo(cx - bookHalfW - w * 0.055f, spineTopY + h * 0.06f)
-                lineTo(cx - bookHalfW - w * 0.055f, spineY - h * 0.02f)
-                quadraticTo(
-                    cx - bookHalfW * 0.45f, spineY - h * 0.03f,
-                    cx, spineY + h * 0.055f
-                )
-                quadraticTo(
-                    cx + bookHalfW * 0.45f, spineY - h * 0.03f,
-                    cx + bookHalfW + w * 0.055f, spineY - h * 0.02f
-                )
-                lineTo(cx + bookHalfW + w * 0.055f, spineTopY + h * 0.06f)
+            // 2. Hardcover 3D binding boards (left & right with gradient bevels)
+            val coverThickness = h * 0.06f
+            val leftBoard = Path().apply {
+                moveTo(cx, baseY + coverThickness * 0.7f)
+                quadraticTo(cx - halfSpan * 0.5f, baseY + coverThickness * 1.15f, cx - halfSpan - w * 0.045f, baseY + coverThickness * 0.35f)
+                lineTo(cx - halfSpan - w * 0.03f, topY + h * 0.08f)
+                quadraticTo(cx - halfSpan * 0.5f, topY + h * 0.02f, cx, topY + spineArch * 1.3f)
+                close()
+            }
+            val rightBoard = Path().apply {
+                moveTo(cx, baseY + coverThickness * 0.7f)
+                quadraticTo(cx + halfSpan * 0.5f, baseY + coverThickness * 1.15f, cx + halfSpan + w * 0.045f, baseY + coverThickness * 0.35f)
+                lineTo(cx + halfSpan + w * 0.03f, topY + h * 0.08f)
+                quadraticTo(cx + halfSpan * 0.5f, topY + h * 0.02f, cx, topY + spineArch * 1.3f)
+                close()
             }
             drawPath(
-                path = coverPath,
-                color = coverColor,
-                style = Stroke(width = w * 0.072f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                path = leftBoard,
+                brush = Brush.linearGradient(
+                    colors = listOf(coverRim, coverPrimary, coverHighlight),
+                    start = Offset(cx - halfSpan, baseY),
+                    end = Offset(cx, topY)
+                )
+            )
+            drawPath(
+                path = rightBoard,
+                brush = Brush.linearGradient(
+                    colors = listOf(coverHighlight, coverPrimary, coverRim),
+                    start = Offset(cx, topY),
+                    end = Offset(cx + halfSpan, baseY)
+                )
             )
 
-            // 3. Static Turquoise Left & Right Base Pages
-            val leftPage = Path().apply {
-                moveTo(cx - w * 0.015f, spineY)
-                quadraticTo(cx - bookHalfW * 0.52f, spineY - h * 0.06f, cx - bookHalfW, spineY - h * 0.035f)
-                lineTo(cx - bookHalfW, spineTopY)
-                quadraticTo(cx - bookHalfW * 0.50f, spineTopY - h * 0.065f, cx - w * 0.015f, spineTopY + h * 0.035f)
+            // Bookmark ribbon peeking neatly below the spine
+            val ribbonPath = Path().apply {
+                moveTo(cx - w * 0.026f, baseY + coverThickness * 0.4f)
+                lineTo(cx + w * 0.026f, baseY + coverThickness * 0.4f)
+                lineTo(cx + w * 0.026f, baseY + coverThickness * 2.15f)
+                lineTo(cx, baseY + coverThickness * 1.72f)
+                lineTo(cx - w * 0.026f, baseY + coverThickness * 2.15f)
                 close()
             }
-            val rightPage = Path().apply {
-                moveTo(cx + w * 0.015f, spineY)
-                quadraticTo(cx + bookHalfW * 0.52f, spineY - h * 0.06f, cx + bookHalfW, spineY - h * 0.035f)
-                lineTo(cx + bookHalfW, spineTopY)
-                quadraticTo(cx + bookHalfW * 0.50f, spineTopY - h * 0.065f, cx + w * 0.015f, spineTopY + h * 0.035f)
-                close()
-            }
-            drawPath(leftPage, color = BrandPageTurquoise)
-            drawPath(rightPage, color = BrandPageTurquoise)
+            drawPath(path = ribbonPath, color = ribbonRed)
 
-            // 4. Staggered Animated Flipping Pages sweeping right -> left with 3D perspective lift
-            fun drawFlippingPage(progress: Float, fillColor: Color, strokeColor: Color) {
-                val angle = progress * PI.toFloat() // 0 (right) -> PI (left)
-                val cosA = cos(angle)               // +1 -> -1
-                val sinA = sin(angle)               // 0 -> 1 -> 0 (arch height)
-
-                val tipX = cx + bookHalfW * cosA
-                val archLift = sinA * pageH * 0.62f
-                val bottomControlX = cx + bookHalfW * 0.52f * cosA
-                val topControlX = cx + bookHalfW * 0.52f * cosA
-
-                val flipPath = Path().apply {
-                    moveTo(cx, spineY - h * 0.01f)
-                    quadraticTo(
-                        bottomControlX,
-                        spineY - h * 0.05f - archLift * 0.45f,
-                        tipX,
-                        spineY - h * 0.04f - archLift * 0.68f
-                    )
-                    lineTo(tipX, spineTopY - archLift)
-                    quadraticTo(
-                        topControlX,
-                        spineTopY - h * 0.06f - archLift * 0.72f,
-                        cx,
-                        spineTopY + h * 0.025f
-                    )
+            // 3. Layered paper stacks (3 thin realistic edges on left & right)
+            for (layer in 2 downTo 0) {
+                val inset = layer * w * 0.014f
+                val yLift = layer * h * 0.017f
+                val fillColor = when (layer) {
+                    2 -> pageShade
+                    1 -> pageWarmCream
+                    else -> pageFrontBright
+                }
+                val leftStack = Path().apply {
+                    moveTo(cx, baseY - yLift)
+                    quadraticTo(cx - halfSpan * 0.52f, baseY - spineArch * 0.9f - yLift, cx - halfSpan + inset, baseY - yLift - h * 0.02f)
+                    lineTo(cx - halfSpan + inset + w * 0.01f, topY + h * 0.04f - yLift * 0.35f)
+                    quadraticTo(cx - halfSpan * 0.52f, topY - spineArch * 0.55f - yLift * 0.35f, cx, topY + spineArch * 0.9f - yLift * 0.35f)
                     close()
                 }
-                val pageAlpha = (0.35f + 0.65f * sinA).coerceIn(0.35f, 1f)
-                drawPath(flipPath, color = fillColor.copy(alpha = pageAlpha))
-                drawPath(
-                    flipPath,
-                    color = strokeColor.copy(alpha = pageAlpha * 0.85f),
-                    style = Stroke(width = w * 0.022f, join = StrokeJoin.Round)
-                )
-            }
-
-            // Draw whichever page is further along first so depth ordering feels natural
-            if (page1Progress < page2Progress) {
-                drawFlippingPage(page2Progress, BrandPageTurquoiseSoft, coverColor.copy(alpha = 0.35f))
-                drawFlippingPage(page1Progress, pageSheetColor, BrandPageTurquoise)
-            } else {
-                drawFlippingPage(page1Progress, pageSheetColor, BrandPageTurquoise)
-                drawFlippingPage(page2Progress, BrandPageTurquoiseSoft, coverColor.copy(alpha = 0.35f))
-            }
-
-            // 5. Floating Coral Star + 3 Sparkle Rays above the book spine (echoing the app icon!)
-            val starCy = h * 0.31f - starPulse * h * 0.055f
-            val starOuterR = w * (0.125f + starPulse * 0.015f)
-            val starInnerR = starOuterR * 0.58f
-
-            val vertices = List(10) { i ->
-                val rad = (-90.0 + i * 36.0) * PI / 180.0
-                val r = if (i % 2 == 0) starOuterR else starInnerR
-                Offset(cx + (r * cos(rad)).toFloat(), starCy + (r * sin(rad)).toFloat())
-            }
-            val midpoints = vertices.indices.map { i ->
-                val a = vertices[i]
-                val b = vertices[(i + 1) % vertices.size]
-                Offset((a.x + b.x) / 2f, (a.y + b.y) / 2f)
-            }
-            val starPath = Path().apply {
-                moveTo(midpoints.last().x, midpoints.last().y)
-                for (i in vertices.indices) {
-                    quadraticTo(vertices[i].x, vertices[i].y, midpoints[i].x, midpoints[i].y)
+                val rightStack = Path().apply {
+                    moveTo(cx, baseY - yLift)
+                    quadraticTo(cx + halfSpan * 0.52f, baseY - spineArch * 0.9f - yLift, cx + halfSpan - inset, baseY - yLift - h * 0.02f)
+                    lineTo(cx + halfSpan - inset - w * 0.01f, topY + h * 0.04f - yLift * 0.35f)
+                    quadraticTo(cx + halfSpan * 0.52f, topY - spineArch * 0.55f - yLift * 0.35f, cx, topY + spineArch * 0.9f - yLift * 0.35f)
+                    close()
                 }
-                close()
+                drawPath(path = leftStack, color = fillColor)
+                drawPath(path = rightStack, color = fillColor)
+                if (layer == 0) {
+                    drawPath(
+                        path = leftStack,
+                        color = pageShade.copy(alpha = 0.7f),
+                        style = Stroke(width = w * 0.011f, join = StrokeJoin.Round)
+                    )
+                    drawPath(
+                        path = rightStack,
+                        color = pageShade.copy(alpha = 0.7f),
+                        style = Stroke(width = w * 0.011f, join = StrokeJoin.Round)
+                    )
+                }
             }
-            drawPath(starPath, color = BrandStarCoral)
 
-            // 3 Coral Sparkle Rays radiating above the star
-            val rayAlpha = 0.45f + 0.55f * starPulse
-            val rayStroke = w * 0.034f
-            val rayAngles = listOf(-128.0, -90.0, -52.0)
-            rayAngles.forEach { deg ->
-                val rad = deg * PI / 180.0
-                val rStart = starOuterR * 1.28f
-                val rEnd = starOuterR * (1.72f + 0.18f * starPulse)
+            // 4. Printed text lines & micro-diagram on static open pages
+            val lineStroke = (w * 0.017f).coerceAtLeast(1.4f)
+            for (row in 0..3) {
+                val frac = 0.25f + row * 0.165f
+                val ly = topY + (baseY - topY) * frac
+                val leftEnd = if (row == 3) cx - halfSpan * 0.36f else cx - halfSpan * 0.19f
+                val rightEnd = if (row == 0) cx + halfSpan * 0.62f else cx + halfSpan * 0.76f
                 drawLine(
-                    color = BrandStarCoral.copy(alpha = rayAlpha),
-                    start = Offset(cx + (rStart * cos(rad)).toFloat(), starCy + (rStart * sin(rad)).toFloat()),
-                    end = Offset(cx + (rEnd * cos(rad)).toFloat(), starCy + (rEnd * sin(rad)).toFloat()),
-                    strokeWidth = rayStroke,
+                    color = if (row == 0) accentTeal.copy(alpha = 0.65f) else pageLineInk.copy(alpha = 0.55f),
+                    start = Offset(cx - halfSpan * 0.76f, ly),
+                    end = Offset(leftEnd, ly - spineArch * 0.18f),
+                    strokeWidth = if (row == 0) lineStroke * 1.25f else lineStroke,
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    color = if (row == 0) accentCoral.copy(alpha = 0.55f) else pageLineInk.copy(alpha = 0.55f),
+                    start = Offset(cx + halfSpan * 0.18f, ly - spineArch * 0.18f),
+                    end = Offset(rightEnd, ly),
+                    strokeWidth = if (row == 0) lineStroke * 1.25f else lineStroke,
                     cap = StrokeCap.Round
                 )
             }
+
+            // Central gutter shadow for realistic depth
+            drawLine(
+                brush = Brush.verticalGradient(
+                    colors = listOf(coverRim.copy(alpha = 0.38f), coverRim.copy(alpha = 0.65f)),
+                    startY = topY + spineArch * 0.8f,
+                    endY = baseY
+                ),
+                start = Offset(cx, topY + spineArch * 0.85f),
+                end = Offset(cx, baseY + coverThickness * 0.35f),
+                strokeWidth = w * 0.026f,
+                cap = StrokeCap.Round
+            )
+
+            // 5. Two staggered smoothly turning 3D curved sheets
+            val sheetPhases = listOf(pagePhase, (pagePhase + 0.5f) % 1f)
+            sheetPhases
+                .sortedBy { p -> sin(p * PI).toFloat() }
+                .forEach { rawP ->
+                    val eased = easeInOutCubic(rawP)
+                    drawCurvedFlippingSheet(
+                        cx = cx,
+                        topY = topY + spineArch * 0.45f,
+                        baseY = baseY - h * 0.03f,
+                        halfSpan = halfSpan * 0.96f,
+                        liftMax = h * 0.21f,
+                        progress = eased,
+                        brightColor = pageFrontBright,
+                        midColor = pageWarmCream,
+                        shadowColor = pageShade,
+                        borderColor = accentTeal.copy(alpha = 0.58f),
+                        inkColor = pageLineInk.copy(alpha = 0.62f),
+                        accentColor = accentTeal
+                    )
+                }
+
+            // 6. Floating academic four-point sparkles above the turning pages
+            drawSparkleStar(
+                center = Offset(cx - w * 0.20f, topY - h * 0.09f - sin(sparklePhase * 2 * PI).toFloat() * h * 0.03f),
+                radius = w * (0.042f + 0.015f * sin(sparklePhase * 2 * PI).toFloat()),
+                color = accentGold.copy(alpha = 0.88f)
+            )
+            drawSparkleStar(
+                center = Offset(cx + w * 0.22f, topY - h * 0.13f + cos(sparklePhase * 2 * PI).toFloat() * h * 0.025f),
+                radius = w * (0.034f + 0.014f * cos(sparklePhase * 2 * PI).toFloat()),
+                color = accentTeal.copy(alpha = 0.85f)
+            )
+            drawSparkleStar(
+                center = Offset(cx + w * 0.02f, topY - h * 0.18f - sin((sparklePhase + 0.35f) * 2 * PI).toFloat() * h * 0.022f),
+                radius = w * (0.026f + 0.010f * sin((sparklePhase + 0.35f) * 2 * PI).toFloat()),
+                color = accentCoral.copy(alpha = 0.82f)
+            )
         }
 
         if (!message.isNullOrBlank()) {
             Spacer(Modifier.height(10.dp))
             Text(
                 text = message,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = qColors.bodyInk,
                 textAlign = TextAlign.Center
             )
         }
@@ -274,54 +337,230 @@ fun QuizzyBookLoader(
 }
 
 /**
- * Compact animated flipping-book loader for buttons, chat indicators, and inline actions.
+ * Refined mini page-turning book loader designed specifically for generation buttons
+ * (Quiz, Cours, Exercice, Image IA, Validation IA).
+ * Renders a crisp 3D miniature open book with beveled cover cradle, layered pages,
+ * curved flipping sheet with sheen, and a golden sparkle accent.
  */
 @Composable
 fun QuizzyInlineLoader(
     modifier: Modifier = Modifier,
-    size: Dp = 22.dp,
-    tint: Color = Color.White
+    size: Dp = 24.dp,
+    tint: Color = MaterialTheme.colorScheme.primary
 ) {
-    val transition = rememberInfiniteTransition(label = "quizzy_inline_loader")
+    val transition = rememberInfiniteTransition(label = "quizzy_inline_book_v2")
     val flip by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 850, easing = LinearEasing),
+            animation = tween(durationMillis = 980, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "inline_flip"
+        label = "inline_book_flip"
     )
 
-    Canvas(modifier = modifier.size(size)) {
+    Canvas(
+        modifier = modifier
+            .size(size)
+            .testTag("quizzy_inline_book_loader")
+    ) {
         val w = this.size.width
         val h = this.size.height
-        val cx = w * 0.5f
-        val baseY = h * 0.78f
-        val topY = h * 0.28f
-        val halfW = w * 0.40f
-        val stroke = Stroke(width = (w * 0.10f).coerceAtLeast(1.8.dp.toPx()), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val cx = w / 2f
+        val topY = h * 0.25f
+        val baseY = h * 0.80f
+        val halfSpan = w * 0.40f
+        val strokeW = (w * 0.075f).coerceAtLeast(1.5f)
+        val goldAccent = Color(0xFFFFD34E)
 
-        // Open book base V
-        val base = Path().apply {
-            moveTo(cx - halfW, topY + h * 0.06f)
-            lineTo(cx - halfW, baseY - h * 0.06f)
-            quadraticTo(cx - halfW * 0.45f, baseY - h * 0.08f, cx, baseY)
-            quadraticTo(cx + halfW * 0.45f, baseY - h * 0.08f, cx + halfW, baseY - h * 0.06f)
-            lineTo(cx + halfW, topY + h * 0.06f)
+        // Subtle glowing cradle beneath the spine
+        val coverPath = Path().apply {
+            moveTo(cx - halfSpan - w * 0.05f, baseY + h * 0.06f)
+            quadraticTo(cx - halfSpan * 0.45f, baseY + h * 0.13f, cx, baseY + h * 0.04f)
+            quadraticTo(cx + halfSpan * 0.45f, baseY + h * 0.13f, cx + halfSpan + w * 0.05f, baseY + h * 0.06f)
         }
-        drawPath(base, color = tint.copy(alpha = 0.85f), style = stroke)
+        drawPath(
+            path = coverPath,
+            color = tint.copy(alpha = 0.88f),
+            style = Stroke(width = strokeW * 1.15f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
 
-        // Flipping page arc sweeping from right to left
-        val angle = flip * PI.toFloat()
-        val tipX = cx + halfW * 0.88f * cos(angle)
-        val tipY = topY - sin(angle) * h * 0.18f
+        // Left & right open pages with smooth book-arch curvature
+        val leftPage = Path().apply {
+            moveTo(cx, baseY - h * 0.01f)
+            quadraticTo(cx - halfSpan * 0.48f, baseY - h * 0.09f, cx - halfSpan, baseY - h * 0.02f)
+            lineTo(cx - halfSpan * 0.94f, topY + h * 0.05f)
+            quadraticTo(cx - halfSpan * 0.48f, topY - h * 0.03f, cx, topY + h * 0.07f)
+            close()
+        }
+        val rightPage = Path().apply {
+            moveTo(cx, baseY - h * 0.01f)
+            quadraticTo(cx + halfSpan * 0.48f, baseY - h * 0.09f, cx + halfSpan, baseY - h * 0.02f)
+            lineTo(cx + halfSpan * 0.94f, topY + h * 0.05f)
+            quadraticTo(cx + halfSpan * 0.48f, topY - h * 0.03f, cx, topY + h * 0.07f)
+            close()
+        }
+        drawPath(leftPage, color = tint.copy(alpha = 0.24f))
+        drawPath(rightPage, color = tint.copy(alpha = 0.18f))
+        drawPath(leftPage, color = tint, style = Stroke(width = strokeW * 0.85f, join = StrokeJoin.Round))
+        drawPath(rightPage, color = tint, style = Stroke(width = strokeW * 0.85f, join = StrokeJoin.Round))
+
+        // Animated curved turning page (eased right-to-left)
+        val eased = easeInOutCubic(flip)
+        val angle = eased * PI
+        val tipX = cx + (halfSpan * 0.94f * cos(angle)).toFloat()
+        val archLift = (h * 0.24f * sin(angle)).toFloat()
+        val ctrlX = cx + (tipX - cx) * 0.52f
+
+        val turningSheet = Path().apply {
+            moveTo(cx, baseY - h * 0.01f)
+            quadraticTo(ctrlX, baseY - archLift * 0.65f, tipX, baseY - h * 0.03f - archLift * 0.45f)
+            lineTo(tipX, topY + h * 0.04f - archLift * 0.65f)
+            quadraticTo(ctrlX, topY - archLift * 0.95f, cx, topY + h * 0.07f)
+            close()
+        }
+        drawPath(turningSheet, color = tint.copy(alpha = 0.55f + 0.35f * sin(angle).toFloat()))
+        drawPath(turningSheet, color = tint, style = Stroke(width = strokeW * 0.9f, join = StrokeJoin.Round))
+
+        // Crisp center spine highlight
         drawLine(
             color = tint,
-            start = Offset(cx, baseY - h * 0.06f),
-            end = Offset(tipX, tipY),
-            strokeWidth = (w * 0.11f).coerceAtLeast(1.8.dp.toPx()),
+            start = Offset(cx, topY + h * 0.07f),
+            end = Offset(cx, baseY + h * 0.04f),
+            strokeWidth = strokeW,
             cap = StrokeCap.Round
         )
+
+        // Subtle animated gold sparkle above the turning sheet
+        val sparkleAlpha = (sin(angle).toFloat()).coerceIn(0.2f, 1f)
+        drawSparkleStar(
+            center = Offset(cx + (tipX - cx) * 0.25f, topY - h * 0.10f - archLift * 0.32f),
+            radius = w * 0.095f * (0.75f + 0.35f * sparkleAlpha),
+            color = goldAccent.copy(alpha = sparkleAlpha)
+        )
     }
+}
+
+private fun DrawScope.drawCurvedFlippingSheet(
+    cx: Float,
+    topY: Float,
+    baseY: Float,
+    halfSpan: Float,
+    liftMax: Float,
+    progress: Float,
+    brightColor: Color,
+    midColor: Color,
+    shadowColor: Color,
+    borderColor: Color,
+    inkColor: Color,
+    accentColor: Color
+) {
+    val angle = progress * PI
+    val cosA = cos(angle).toFloat()
+    val sinA = sin(angle).toFloat()
+    val tipX = cx + halfSpan * cosA
+    val lift = liftMax * sinA
+    val midX = cx + (tipX - cx) * 0.52f
+
+    // Soft dynamic shadow cast onto the underlying pages
+    if (sinA > 0.08f) {
+        val shadowEndX = cx + halfSpan * 0.85f * cosA
+        val shadowPath = Path().apply {
+            moveTo(cx, baseY)
+            lineTo(shadowEndX, baseY - lift * 0.06f)
+            lineTo(shadowEndX, topY + (baseY - topY) * 0.08f)
+            lineTo(cx, topY)
+            close()
+        }
+        drawPath(
+            path = shadowPath,
+            color = Color.Black.copy(alpha = 0.08f * sinA)
+        )
+    }
+
+    val sheetPath = Path().apply {
+        moveTo(cx, baseY)
+        quadraticTo(
+            midX,
+            baseY - lift * 0.82f,
+            tipX,
+            baseY - lift * 0.34f
+        )
+        lineTo(
+            tipX,
+            topY - lift * 0.46f
+        )
+        quadraticTo(
+            midX,
+            topY - lift * 0.96f,
+            cx,
+            topY
+        )
+        close()
+    }
+
+    // Dynamic 3D lighting: brighter on right half, gently shaded as it curls over left
+    val nearSpineColor = if (cosA >= 0f) midColor else shadowColor
+    val edgeColor = if (cosA >= 0f) brightColor else midColor
+    drawPath(
+        path = sheetPath,
+        brush = Brush.linearGradient(
+            colors = listOf(nearSpineColor, edgeColor),
+            start = Offset(cx, (topY + baseY) / 2f),
+            end = Offset(tipX, (topY + baseY) / 2f)
+        )
+    )
+
+    // Perspective-foreshortened text lines on the turning sheet
+    if (kotlin.math.abs(cosA) > 0.24f) {
+        val lineW = (size.width * 0.013f).coerceAtLeast(1.1f)
+        for (row in 0..2) {
+            val f = 0.28f + row * 0.20f
+            val ySpine = topY + (baseY - topY) * f
+            val yEdge = (topY - lift * 0.46f) + ((baseY - lift * 0.34f) - (topY - lift * 0.46f)) * f
+            val x1 = cx + (tipX - cx) * 0.20f
+            val x2 = cx + (tipX - cx) * (if (row == 0) 0.68f else 0.78f)
+            val y1 = ySpine + (yEdge - ySpine) * 0.20f - lift * 0.18f
+            val y2 = ySpine + (yEdge - ySpine) * 0.78f - lift * 0.10f
+            drawLine(
+                color = if (row == 0) accentColor.copy(alpha = 0.55f) else inkColor,
+                start = Offset(x1, y1),
+                end = Offset(x2, y2),
+                strokeWidth = lineW,
+                cap = StrokeCap.Round
+            )
+        }
+    }
+
+    drawPath(
+        path = sheetPath,
+        color = borderColor,
+        style = Stroke(width = (size.width * 0.015f).coerceAtLeast(1.2f), join = StrokeJoin.Round)
+    )
+}
+
+private fun DrawScope.drawSparkleStar(
+    center: Offset,
+    radius: Float,
+    color: Color
+) {
+    if (radius <= 0.5f) return
+    val inner = radius * 0.30f
+    val path = Path().apply {
+        moveTo(center.x, center.y - radius)
+        lineTo(center.x + inner, center.y - inner)
+        lineTo(center.x + radius, center.y)
+        lineTo(center.x + inner, center.y + inner)
+        lineTo(center.x, center.y + radius)
+        lineTo(center.x - inner, center.y + inner)
+        lineTo(center.x - radius, center.y)
+        lineTo(center.x - inner, center.y - inner)
+        close()
+    }
+    drawPath(path = path, color = color)
+}
+
+private fun easeInOutCubic(t: Float): Float {
+    val x = t.coerceIn(0f, 1f)
+    return if (x < 0.5f) 4f * x * x * x else 1f - (-2f * x + 2f) * (-2f * x + 2f) * (-2f * x + 2f) / 2f
 }

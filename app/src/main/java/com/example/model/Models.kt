@@ -68,6 +68,7 @@ data class ChildProfile(
     val gradeLevel: String = "CE2",
     val avatarKey: String = "owl",
     val pinHash: String = "",
+    val languageToneLevel: String = LanguageToneCatalog.AUTO,
     val lessonsCount: Long = 0L,
     val quizzesTaken: Long = 0L,
     val totalCorrect: Long = 0L,
@@ -149,6 +150,8 @@ data class QuizQuestion(
     val prompt: String = "",
     val options: List<String> = emptyList(),
     val correctIndex: Int = 0,
+    val correctIndices: List<Int> = emptyList(),
+    val allowMultipleSelection: Boolean = false,
     val explanation: String = "",
     val questionType: String = TYPE_MCQ, // "MCQ" | "FILL_BLANK" | "DRAG_MATCH" | "DRAG_ORDER" | "IMAGE_CHOICE"
     val sentenceTemplate: String = "",
@@ -181,16 +184,41 @@ data class QuizQuestion(
                 (options.size < 2 && acceptedAnswers.isNotEmpty()))
 
     @get:Exclude
+    val effectiveCorrectIndices: Set<Int>
+        get() {
+            val maxIndex = when {
+                isImageChoice -> imageOptions.lastIndex
+                else -> options.lastIndex
+            }
+            if (maxIndex < 0) return emptySet()
+            val cleaned = correctIndices.filter { it in 0..maxIndex }.toSet()
+            return if (cleaned.isNotEmpty()) cleaned else setOf(correctIndex.coerceIn(0, maxIndex))
+        }
+
+    @get:Exclude
+    val isMultiSelect: Boolean
+        get() {
+            if (isDragMatch || isDragOrder || isFillBlank) return false
+            val choiceCount = if (isImageChoice) imageOptions.size else options.size
+            if (choiceCount < 2) return false
+            return allowMultipleSelection || effectiveCorrectIndices.size > 1
+        }
+
+    @get:Exclude
     val forbiddenAnswersForHints: List<String>
         get() = when {
             isDragMatch -> matchingPairs.map { it.right }.filter { it.isNotBlank() }
             isDragOrder -> listOf(orderedItems.joinToString(" ")).filter { it.isNotBlank() }
-            isImageChoice -> listOfNotNull(
-                imageOptions.getOrNull(correctIndex)?.label?.takeIf { it.isNotBlank() },
-                imageOptions.getOrNull(correctIndex)?.visualKey?.takeIf { it.isNotBlank() }
-            )
+            isImageChoice -> effectiveCorrectIndices.flatMap { idx ->
+                listOfNotNull(
+                    imageOptions.getOrNull(idx)?.label?.takeIf { it.isNotBlank() },
+                    imageOptions.getOrNull(idx)?.visualKey?.takeIf { it.isNotBlank() }
+                )
+            }
             isFillBlank -> acceptedAnswers.filter { it.isNotBlank() }
-            else -> listOfNotNull(options.getOrNull(correctIndex)?.takeIf { it.isNotBlank() })
+            else -> effectiveCorrectIndices.mapNotNull { idx ->
+                options.getOrNull(idx)?.takeIf { it.isNotBlank() }
+            }
         }
 
     companion object {
@@ -507,6 +535,101 @@ object SchoolCatalog {
     }
 }
 
+data class LanguageToneOption(
+    val id: String,
+    val shortLabel: String,
+    val title: String,
+    val description: String
+)
+
+object LanguageToneCatalog {
+    const val AUTO = "AUTO"
+    const val SIMPLIFIED = "SIMPLIFIED"
+    const val STANDARD = "STANDARD"
+    const val MATURE = "MATURE"
+    const val ADVANCED = "ADVANCED"
+
+    val options = listOf(
+        LanguageToneOption(
+            id = AUTO,
+            shortLabel = "Âge (auto)",
+            title = "Adapté à l'âge (par défaut)",
+            description = "Calibre automatiquement le vocabulaire, les indices, les synthèses et les conseils selon l'âge et la classe."
+        ),
+        LanguageToneOption(
+            id = SIMPLIFIED,
+            shortLabel = "Très simple",
+            title = "Très simple & rassurant",
+            description = "Phrases courtes, mots du quotidien, exemples très concrets et ton doux."
+        ),
+        LanguageToneOption(
+            id = STANDARD,
+            shortLabel = "Clair",
+            title = "Clair & pédagogique",
+            description = "Vocabulaire accessible et structuré étape par étape (niveau primaire supérieur / début collège)."
+        ),
+        LanguageToneOption(
+            id = MATURE,
+            shortLabel = "Mature",
+            title = "Mature & précis",
+            description = "Ton posé sans formulations enfantines, vocabulaire scolaire précis et raisonnement structuré."
+        ),
+        LanguageToneOption(
+            id = ADVANCED,
+            shortLabel = "Soutenu",
+            title = "Soutenu & exigeant",
+            description = "Style rigoureux et analytique (niveau lycée / avancé) avec terminologie disciplinaire précise."
+        )
+    )
+
+    val validIds: Set<String> = options.map { it.id }.toSet()
+
+    fun normalize(raw: String?): String {
+        val clean = raw?.trim()?.uppercase().orEmpty()
+        return if (clean in validIds) clean else AUTO
+    }
+
+    fun optionFor(raw: String?): LanguageToneOption {
+        val norm = normalize(raw)
+        return options.firstOrNull { it.id == norm } ?: options.first()
+    }
+
+    fun isMatureRegister(childAge: Int, toneLevel: String?): Boolean = when (normalize(toneLevel)) {
+        MATURE, ADVANCED -> true
+        SIMPLIFIED, STANDARD -> false
+        else -> childAge >= 13
+    }
+
+    fun buildAiToneInstruction(
+        childAge: Int,
+        gradeLevel: String,
+        toneLevel: String? = AUTO
+    ): String {
+        return when (normalize(toneLevel)) {
+            SIMPLIFIED ->
+                "NIVEAU DE LANGAGE CHOISI PAR LE PARENT (TRÈS SIMPLE) : Emploie un vocabulaire très simple, des phrases courtes, des images concrètes du quotidien et un ton chaleureux et rassurant pour TOUS les textes (synthèses, explications, indices, conseils et bilans)."
+            STANDARD ->
+                "NIVEAU DE LANGAGE CHOISI PAR LE PARENT (CLAIR & PÉDAGOGIQUE) : Emploie un vocabulaire clair et accessible, explique chaque notion étape par étape avec des exemples concrets et un ton bienveillant pour TOUS les textes (synthèses, explications, indices, conseils et bilans)."
+            MATURE ->
+                "NIVEAU DE LANGAGE CHOISI PAR LE PARENT (MATURE & PRÉCIS) : Évite toute formulation enfantine ou bébé. Emploie un ton mature, direct, posé et respectueux, un vocabulaire scolaire précis et des explications structurées pour TOUS les textes (synthèses, explications, indices, conseils et bilans), tout en restant bienveillant et encourageant."
+            ADVANCED ->
+                "NIVEAU DE LANGAGE CHOISI PAR LE PARENT (SOUTENU & EXIGEANT) : Emploie un registre soutenu, rigoureux et analytique de niveau lycée/avancé, avec une terminologie disciplinaire exacte, une méthodologie exigeante et aucune formulation puérile dans TOUS les textes (synthèses, explications, indices, conseils et bilans), tout en restant constructif et encourageant."
+            else -> when {
+                childAge <= 7 ->
+                    "ADAPTATION À L'ÂGE ($childAge ans, $gradeLevel) : Emploie des mots très simples de CP/CE1, des phrases très courtes, des exemples concrets du quotidien et un ton joyeux, doux et rassurant dans CHAQUE conseil, détail, indice et synthèse."
+                childAge <= 9 ->
+                    "ADAPTATION À L'ÂGE ($childAge ans, $gradeLevel) : Emploie des mots simples de primaire (CE2/CM1), des phrases claires, des exemples concrets et un ton bienveillant et motivant dans CHAQUE conseil, détail, indice et synthèse."
+                childAge <= 11 ->
+                    "ADAPTATION À L'ÂGE ($childAge ans, $gradeLevel) : Emploie un vocabulaire accessible de fin de primaire/6ème, des explications structurées étape par étape et un ton encourageant sans être bébé dans CHAQUE conseil, détail, indice et synthèse."
+                childAge <= 14 ->
+                    "ADAPTATION À L'ÂGE ($childAge ans, $gradeLevel) : Emploie un ton clair et mature de collège, structure précisément les notions, définitions et méthodes sans langage enfantin dans CHAQUE conseil, détail, indice et synthèse."
+                else ->
+                    "ADAPTATION À L'ÂGE ($childAge ans, $gradeLevel) : Emploie un style mature, rigoureux et limpide de lycée, avec définitions exactes, raisonnement structuré et vocabulaire académique adapté dans CHAQUE conseil, détail, indice et synthèse."
+            }
+        }
+    }
+}
+
 object PinHasher {
     fun hashPin(pin: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
@@ -697,9 +820,25 @@ object QuizFeedbackHelper {
         options = setOf(RegexOption.IGNORE_CASE)
     )
 
-    fun friendlyWrongAnswerMessage(questionIndex: Int): String {
-        val safeIdx = questionIndex.coerceAtLeast(0) % wrongAnswerMessages.size
-        return wrongAnswerMessages[safeIdx]
+    private val matureWrongAnswerMessages = listOf(
+        "Ce n'est pas encore la réponse attendue. Appuie-toi sur cet indice méthodologique pour revoir ton raisonnement.",
+        "Réponse inexacte pour cet essai : reprends la question calmement à l'aide de cette piste.",
+        "Pas encore juste. Utilise cet indice pour analyser la consigne sous un autre angle et réessayer.",
+        "Cette proposition ne convient pas encore. Prends un instant pour vérifier ta démarche avec cette indication."
+    )
+
+    fun friendlyWrongAnswerMessage(
+        questionIndex: Int,
+        childAge: Int = 10,
+        languageToneLevel: String = LanguageToneCatalog.AUTO
+    ): String {
+        val pool = if (LanguageToneCatalog.isMatureRegister(childAge, languageToneLevel)) {
+            matureWrongAnswerMessages
+        } else {
+            wrongAnswerMessages
+        }
+        val safeIdx = questionIndex.coerceAtLeast(0) % pool.size
+        return pool[safeIdx]
     }
 
     /**

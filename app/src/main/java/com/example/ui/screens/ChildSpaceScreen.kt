@@ -93,7 +93,13 @@ import androidx.core.content.FileProvider
 import com.example.data.CourseAttachment
 import com.example.data.FrenchErrorMessages
 import com.example.data.GeminiTutorService
+import com.example.data.local.ChildSqlOverview
+import com.example.data.local.GameScoreEntity
+import com.example.data.local.StudioImageEntity
+import com.example.data.local.SubjectSqlStats
 import com.example.model.ChildProfile
+import com.example.model.ExerciseItem
+import com.example.model.ExerciseSheet
 import com.example.model.Family
 import com.example.model.GamificationCatalog
 import com.example.model.Lesson
@@ -104,9 +110,12 @@ import com.example.model.WeeklyReviewScheduler
 import com.example.notifications.QuizNotificationHelper
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -121,6 +130,7 @@ import com.example.ui.components.GradeLevelSelector
 import com.example.ui.components.MascotSpeechBubble
 import com.example.ui.components.ModernCard
 import com.example.ui.components.QuizClipboardIllustration
+import com.example.ui.components.QuizzyMascotMood
 import com.example.ui.components.QuizzyStarMascot
 import com.example.ui.components.SubjectBadge
 import com.example.ui.components.SubjectPastelCard
@@ -132,6 +142,7 @@ import com.example.ui.components.subjectColor
 import com.example.ui.components.subjectPastelSurface
 import com.example.ui.theme.CoralAccent
 import com.example.ui.theme.QuizzyTheme
+import com.example.ui.viewmodel.ImageStudioUiState
 import com.example.ui.viewmodel.OperationStatus
 import com.google.firebase.Timestamp
 import kotlinx.coroutines.launch
@@ -177,19 +188,52 @@ fun ChildSpaceScreen(
         missedQuestions: List<MissedQuestionRecord>
     ) -> Unit,
     onTranscribeAudio: (bytes: ByteArray, onResult: (String) -> Unit) -> Unit,
-    nowCalendarProvider: () -> Calendar = { Calendar.getInstance() }
+    nowCalendarProvider: () -> Calendar = { Calendar.getInstance() },
+    childGameScores: List<GameScoreEntity> = emptyList(),
+    childStudioImages: List<StudioImageEntity> = emptyList(),
+    childSubjectSqlStats: List<SubjectSqlStats> = emptyList(),
+    childSqlOverview: ChildSqlOverview = ChildSqlOverview(),
+    imageStudioState: ImageStudioUiState = ImageStudioUiState.Idle,
+    onRecord3DGameFinished: (score: Int, correctCount: Int, totalQuestions: Int, maxCombo: Int, durationSec: Int, subject: String) -> Unit = { _, _, _, _, _, _ -> },
+    onGenerateStudioImage: (prompt: String, styleLabel: String, subject: String) -> Unit = { _, _, _ -> },
+    onEditStudioImage: (sourceBitmap: Bitmap, editInstruction: String, basePrompt: String, subject: String) -> Unit = { _, _, _, _ -> },
+    onLoadStudioBitmap: suspend (String) -> Bitmap? = { null },
+    onDeleteStudioImage: (StudioImageEntity) -> Unit = {},
+    onResetImageStudioState: () -> Unit = {},
+    exerciseSheets: List<ExerciseSheet> = emptyList(),
+    exerciseOpStatus: OperationStatus = OperationStatus.Idle,
+    gradingExerciseItemKeys: Set<String> = emptySet(),
+    onClearExerciseOpStatus: () -> Unit = {},
+    onDepositExercise: (
+        subject: String,
+        bitmap: Bitmap?,
+        attachments: List<CourseAttachment>,
+        notes: String
+    ) -> Unit = { _, _, _, _ -> },
+    onGradeExerciseItem: (sheet: ExerciseSheet, item: ExerciseItem, answer: String) -> Unit = { _, _, _ -> },
+    onDeleteExerciseSheet: (String) -> Unit = {},
+    finalizingExerciseSheetIds: Set<String> = emptySet(),
+    onFinalizeExercise: (sheet: ExerciseSheet, draftAnswersByItemId: Map<String, String>) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val childLessons = remember(lessons, child.id) { lessons.filter { it.childId == child.id } }
     val childQuizzes = remember(quizzes, child.id) { quizzes.filter { it.childId == child.id } }
+    val childExerciseSheets = remember(exerciseSheets, child.id) {
+        exerciseSheets.filter { it.childId == child.id }
+    }
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var activeLessonId by remember { mutableStateOf<String?>(null) }
     var activeQuizId by remember { mutableStateOf<String?>(null) }
+    var activeExerciseId by remember { mutableStateOf<String?>(null) }
+    var show3DGame by remember { mutableStateOf(false) }
+    var showImageStudio by remember { mutableStateOf(false) }
     var showDepositDialog by remember { mutableStateOf(false) }
+    var showDepositExerciseDialog by remember { mutableStateOf(false) }
     var showGradeDialog by remember { mutableStateOf(false) }
     var selectedSubjectFilter by remember { mutableStateOf("Toutes") }
     var selectedDocTypeFilter by remember { mutableStateOf("Tout") }
+    var selectedExerciseSubjectFilter by remember { mutableStateOf("Toutes") }
 
     // Schedule Play-Policy compliant Sunday 14:00 local reminder whenever missed answers are stored
     LaunchedEffect(child.id, child.weeklyMissedQuestions.size) {
@@ -219,6 +263,31 @@ fun ChildSpaceScreen(
         }
     }
 
+    // Navigate automatically to newly extracted verbatim school exercise
+    LaunchedEffect(exerciseOpStatus, childExerciseSheets) {
+        if (exerciseOpStatus is OperationStatus.Success && !exerciseOpStatus.createdExerciseId.isNullOrBlank()) {
+            val created = childExerciseSheets.firstOrNull { it.id == exerciseOpStatus.createdExerciseId }
+            if (created != null) {
+                showDepositExerciseDialog = false
+                activeExerciseId = created.id
+                onClearExerciseOpStatus()
+            }
+        }
+    }
+
+    val activeExercise = childExerciseSheets.firstOrNull { it.id == activeExerciseId }
+    if (activeExercise != null) {
+        ExercisePlayerScreen(
+            sheet = activeExercise,
+            gradingItemKeys = gradingExerciseItemKeys,
+            onBack = { activeExerciseId = null },
+            onValidateItemAnswer = onGradeExerciseItem,
+            isFinalizing = activeExercise.id in finalizingExerciseSheetIds,
+            onFinalizeExercise = onFinalizeExercise
+        )
+        return
+    }
+
     val activeQuiz = childQuizzes.firstOrNull { it.id == activeQuizId }
     if (activeQuiz != null) {
         val parentLesson = childLessons.firstOrNull { it.id == activeQuiz.lessonId }
@@ -228,6 +297,8 @@ fun ChildSpaceScreen(
             childPreviousXp = child.xp,
             childExistingBadges = child.badges,
             childQuizzesTaken = child.quizzesTaken,
+            childAge = child.age.toInt(),
+            childLanguageToneLevel = child.languageToneLevel,
             onBack = { activeQuizId = null },
             onQuizCompletedFull = { score, total, maxStreak, masteredSkills, weakSkills, earnedXp, missedQuestions ->
                 onSubmitQuizResult(
@@ -265,6 +336,34 @@ fun ChildSpaceScreen(
             onAddDocumentsToLesson = { bitmap, attachments, notes ->
                 onAddDocumentsToLesson(activeLesson, bitmap, attachments, notes)
             }
+        )
+        return
+    }
+
+    if (show3DGame) {
+        Quizzy3DGameScreen(
+            child = child,
+            quizzes = childQuizzes,
+            lessons = childLessons,
+            recentScores = childGameScores,
+            subjectSqlStats = childSubjectSqlStats,
+            onRecordGameFinished = onRecord3DGameFinished,
+            onBack = { show3DGame = false }
+        )
+        return
+    }
+
+    if (showImageStudio) {
+        ImageStudioScreen(
+            child = child,
+            studioState = imageStudioState,
+            savedImages = childStudioImages,
+            onGenerateImage = onGenerateStudioImage,
+            onEditImage = onEditStudioImage,
+            onLoadSavedBitmap = onLoadStudioBitmap,
+            onDeleteSavedImage = onDeleteStudioImage,
+            onResetState = onResetImageStudioState,
+            onBack = { showImageStudio = false }
         )
         return
     }
@@ -399,22 +498,46 @@ fun ChildSpaceScreen(
                         colors = navColors,
                         modifier = Modifier.testTag("nav_child_quizzes")
                     )
+                    NavigationBarItem(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        icon = { Icon(Icons.AutoMirrored.Filled.Assignment, contentDescription = null) },
+                        label = { Text("Exercices") },
+                        colors = navColors,
+                        modifier = Modifier.testTag("nav_child_exercises")
+                    )
                 }
             }
         },
         floatingActionButton = {
-            if (selectedTab == 0) {
-                FloatingActionButton(
-                    onClick = {
-                        onClearOpStatus()
-                        showDepositDialog = true
-                    },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = CircleShape,
-                    modifier = Modifier.testTag("deposit_course_fab")
-                ) {
-                    Icon(Icons.Filled.AddAPhoto, contentDescription = "Ajouter un cours ou exercice")
+            when (selectedTab) {
+                0 -> {
+                    FloatingActionButton(
+                        onClick = {
+                            onClearOpStatus()
+                            showDepositDialog = true
+                        },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        shape = CircleShape,
+                        modifier = Modifier.testTag("deposit_course_fab")
+                    ) {
+                        Icon(Icons.Filled.AddAPhoto, contentDescription = "Ajouter un cours ou exercice")
+                    }
+                }
+                2 -> {
+                    FloatingActionButton(
+                        onClick = {
+                            onClearExerciseOpStatus()
+                            showDepositExerciseDialog = true
+                        },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        shape = CircleShape,
+                        modifier = Modifier.testTag("deposit_exercise_fab")
+                    ) {
+                        Icon(Icons.Filled.AddAPhoto, contentDescription = "Importer un exercice à faire")
+                    }
                 }
             }
         }
@@ -439,7 +562,22 @@ fun ChildSpaceScreen(
                     onOpenDeposit = {
                         onClearOpStatus()
                         showDepositDialog = true
-                    }
+                    },
+                    sqlOverview = childSqlOverview,
+                    onOpen3DGame = { show3DGame = true },
+                    onOpenImageStudio = { showImageStudio = true }
+                )
+                2 -> ChildExercisesTab(
+                    child = child,
+                    exerciseSheets = childExerciseSheets,
+                    selectedSubject = selectedExerciseSubjectFilter,
+                    onSelectSubject = { selectedExerciseSubjectFilter = it },
+                    onOpenExercise = { activeExerciseId = it.id },
+                    onOpenDepositExercise = {
+                        onClearExerciseOpStatus()
+                        showDepositExerciseDialog = true
+                    },
+                    onDeleteExercise = { sheet -> onDeleteExerciseSheet(sheet.id) }
                 )
                 else -> ChildQuizzesAndProgressTab(
                     familyName = family.familyName,
@@ -451,7 +589,10 @@ fun ChildSpaceScreen(
                     onGenerateGapQuiz = onGenerateGapQuiz,
                     onGenerateSundayReviewQuiz = onGenerateSundayReviewQuiz,
                     onEditGrade = { showGradeDialog = true },
-                    nowCalendarProvider = nowCalendarProvider
+                    nowCalendarProvider = nowCalendarProvider,
+                    sqlOverview = childSqlOverview,
+                    onOpen3DGame = { show3DGame = true },
+                    onOpenImageStudio = { showImageStudio = true }
                 )
             }
         }
@@ -472,6 +613,25 @@ fun ChildSpaceScreen(
             },
             onSubmit = { subject, documentType, difficulty, bitmap, attachments, notes ->
                 onDepositCourse(subject, documentType, difficulty, bitmap, attachments, notes)
+            }
+        )
+    }
+
+    if (showDepositExerciseDialog) {
+        DepositExerciseDialog(
+            child = child,
+            opStatus = exerciseOpStatus,
+            isTranscribing = isTranscribing,
+            transcribeError = transcribeError,
+            onTranscribeAudio = onTranscribeAudio,
+            onDismiss = {
+                if (exerciseOpStatus !is OperationStatus.Busy) {
+                    onClearExerciseOpStatus()
+                    showDepositExerciseDialog = false
+                }
+            },
+            onSubmit = { subject, bitmap, attachments, notes ->
+                onDepositExercise(subject, bitmap, attachments, notes)
             }
         )
     }
@@ -501,7 +661,10 @@ private fun ChildCoursesTab(
     onSelectDocType: (String) -> Unit,
     onOpenLesson: (Lesson) -> Unit,
     onStartQuiz: (Quiz) -> Unit,
-    onOpenDeposit: () -> Unit
+    onOpenDeposit: () -> Unit,
+    sqlOverview: ChildSqlOverview,
+    onOpen3DGame: () -> Unit,
+    onOpenImageStudio: () -> Unit
 ) {
     val filtered = remember(lessons, selectedSubject, selectedDocType) {
         lessons.filter { lesson ->
@@ -572,7 +735,7 @@ private fun ChildCoursesTab(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    QuizzyStarMascot(size = 86.dp)
+                    QuizzyStarMascot(size = 102.dp, mood = QuizzyMascotMood.WAVE)
                     MascotSpeechBubble(
                         text = "Prêt à réviser et\nprogresser ?",
                         modifier = Modifier.weight(1f)
@@ -716,6 +879,90 @@ private fun ChildCoursesTab(
                                     fontWeight = FontWeight.ExtraBold
                                 )
                             }
+                        }
+                    }
+                }
+            }
+
+            // 4b. Quick-access row for Three.js 3D Arena & Gemini Nano Banana 2.1 Image Studio
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        onClick = onOpen3DGame,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("open_3d_game_card"),
+                        shape = RoundedCornerShape(22.dp),
+                        color = qColors.pastelSky,
+                        border = BorderStroke(1.dp, qColors.parentSkyAccent.copy(alpha = 0.28f))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.SportsEsports,
+                                contentDescription = null,
+                                tint = qColors.parentSkyAccent,
+                                modifier = Modifier.size(26.dp)
+                            )
+                            Text(
+                                text = "Jeu & Labo 3D",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = qColors.headingInk
+                            )
+                            Text(
+                                text = if (sqlOverview.bestGameScore > 0) {
+                                    "Record SQL : ${sqlOverview.bestGameScore} pts"
+                                } else {
+                                    "Arena Three.js & modèles 3D"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = qColors.secondaryInk,
+                                maxLines = 2
+                            )
+                        }
+                    }
+
+                    Surface(
+                        onClick = onOpenImageStudio,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("open_image_studio_card"),
+                        shape = RoundedCornerShape(22.dp),
+                        color = qColors.pastelLavender,
+                        border = BorderStroke(1.dp, qColors.violetInk.copy(alpha = 0.28f))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Brush,
+                                contentDescription = null,
+                                tint = qColors.violetInk,
+                                modifier = Modifier.size(26.dp)
+                            )
+                            Text(
+                                text = "Studio Images IA",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = qColors.headingInk
+                            )
+                            Text(
+                                text = if (sqlOverview.totalStudioImages > 0) {
+                                    "${sqlOverview.totalStudioImages} création${if (sqlOverview.totalStudioImages > 1) "s" else ""} en SQL"
+                                } else {
+                                    "Créer & retoucher (IA)"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = qColors.secondaryInk,
+                                maxLines = 2
+                            )
                         }
                     }
                 }
@@ -973,7 +1220,10 @@ private fun ChildQuizzesAndProgressTab(
     onGenerateGapQuiz: () -> Unit,
     onGenerateSundayReviewQuiz: (difficulty: String) -> Unit,
     onEditGrade: () -> Unit,
-    nowCalendarProvider: () -> Calendar
+    nowCalendarProvider: () -> Calendar,
+    sqlOverview: ChildSqlOverview,
+    onOpen3DGame: () -> Unit,
+    onOpenImageStudio: () -> Unit
 ) {
     val allWeakPoints = remember(child.weakPoints, lessons) {
         (child.weakPoints + lessons.flatMap { it.weakPoints })
@@ -1066,6 +1316,47 @@ private fun ChildQuizzesAndProgressTab(
                         Spacer(Modifier.width(8.dp))
                         Text("Modifier ma classe ou mon âge")
                     }
+                }
+            }
+        }
+
+        // Interactive 3D Arena & AI Image Studio Banner inside Quizzes Tab
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = onOpen3DGame,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp)
+                        .testTag("quiz_tab_open_3d_game_button"),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = qColors.navyActionContainer,
+                        contentColor = qColors.navyActionOnContainer
+                    )
+                ) {
+                    Icon(Icons.Filled.SportsEsports, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Jeu 3D (${sqlOverview.bestGameScore})", fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                }
+                Button(
+                    onClick = onOpenImageStudio,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp)
+                        .testTag("quiz_tab_open_image_studio_button"),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Icon(Icons.Filled.Brush, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Images IA", fontWeight = FontWeight.ExtraBold, maxLines = 1)
                 }
             }
         }

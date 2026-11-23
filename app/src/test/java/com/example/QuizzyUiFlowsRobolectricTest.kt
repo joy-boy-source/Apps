@@ -900,7 +900,7 @@ class QuizzyUiFlowsRobolectricTest {
         composeRule.onNodeWithTag("quiz_image_option_2").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("quiz_image_option_3").performScrollTo().assertIsDisplayed()
 
-        // 1st wrong image (option 1): Indice 1 shown ONLY, next attempt offers half points (+12 XP)
+        // Q1 1st wrong image (option 1): Indice 1 shown ONLY, next attempt offers half points (+12 XP)
         composeRule.onNodeWithTag("quiz_image_option_1").performScrollTo().performClick()
         composeRule.onNodeWithTag("quiz_validate_button").performScrollTo().performClick()
         composeRule.waitForIdle()
@@ -908,7 +908,37 @@ class QuizzyUiFlowsRobolectricTest {
         composeRule.onNodeWithTag("quiz_guiding_hint_2").assertDoesNotExist()
         composeRule.onNodeWithText("+12 XP", substring = true).performScrollTo().assertIsDisplayed()
 
-        // 2nd wrong image (option 2): BOTH Indice 1 AND Indice 2 are visible simultaneously, next attempt offers quarter points (+6 XP)
+        // Q1 2nd wrong image (option 2): 2-errors auto-advance notice shown; queued for end-of-quiz remediation
+        composeRule.onNodeWithTag("quiz_image_option_2").performScrollTo().performClick()
+        composeRule.onNodeWithTag("quiz_validate_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("quiz_two_errors_advance_card").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("quiz_next_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+
+        // Q2 (FILL_BLANK): 1st wrong attempt -> Indice 1 shown, next try offers half points (+12 XP)
+        composeRule.onNodeWithTag("quiz_fill_blank_input").performScrollTo().performTextInput("50")
+        composeRule.onNodeWithTag("quiz_validate_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("quiz_guiding_hint_1").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("+12 XP", substring = true).performScrollTo().assertIsDisplayed()
+
+        // Q2 2nd attempt right ("56"): earns half points (+12 XP), then button leads to remediation round
+        composeRule.onNodeWithTag("quiz_fill_blank_input").performScrollTo().performTextClearance()
+        composeRule.onNodeWithTag("quiz_fill_blank_input").performScrollTo().performTextInput("56")
+        composeRule.onNodeWithTag("quiz_validate_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("+12 XP (½ points)", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("quiz_next_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+
+        // Remediation round for Q1: unlimited tries, 0 XP, cumulative Indice 1 + Indice 2 on 2nd error
+        composeRule.onNodeWithTag("quiz_image_option_1").performScrollTo().performClick()
+        composeRule.onNodeWithTag("quiz_validate_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("quiz_guiding_hint_1").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Rattrapage (0 XP)", substring = true).performScrollTo().assertIsDisplayed()
+
         composeRule.onNodeWithTag("quiz_image_option_2").performScrollTo().performClick()
         composeRule.onNodeWithTag("quiz_validate_button").performScrollTo().performClick()
         composeRule.waitForIdle()
@@ -918,38 +948,17 @@ class QuizzyUiFlowsRobolectricTest {
             .performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Observe comment deux segments se croisent comme le coin d'un cahier.")
             .performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("+6 XP", substring = true).performScrollTo().assertIsDisplayed()
 
-        // 3rd try right (option 0): earns +6 XP (quarter points)
+        // Solve Q1 in remediation (option 0): 0 XP awarded, then finish quiz
         composeRule.onNodeWithTag("quiz_image_option_0").performScrollTo().performClick()
         composeRule.onNodeWithTag("quiz_validate_button").performScrollTo().performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("+6 XP (¼ points)", substring = true).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithTag("quiz_next_button").performScrollTo().performClick()
-
-        // Q2: 3 wrong attempts -> still allowed to retry, BOTH hints stay visible, 0 XP awarded when finally right!
-        listOf("50", "52", "54").forEach { wrong ->
-            composeRule.onNodeWithTag("quiz_fill_blank_input").performScrollTo().performTextClearance()
-            composeRule.onNodeWithTag("quiz_fill_blank_input").performScrollTo().performTextInput(wrong)
-            composeRule.onNodeWithTag("quiz_validate_button").performScrollTo().performClick()
-            composeRule.waitForIdle()
-        }
-        composeRule.onNodeWithTag("quiz_guiding_hint_1").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithTag("quiz_guiding_hint_2").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Aucun point (0 XP)", substring = true).performScrollTo().assertIsDisplayed()
-
-        // 4th try right ("56"): allowed to finish, earns strictly 0 XP on this question
-        composeRule.onNodeWithTag("quiz_fill_blank_input").performScrollTo().performTextClearance()
-        composeRule.onNodeWithTag("quiz_fill_blank_input").performScrollTo().performTextInput("56")
-        composeRule.onNodeWithTag("quiz_validate_button").performScrollTo().performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithText("0 XP à ce niveau", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("quiz_next_button").performScrollTo().performClick()
         composeRule.waitForIdle()
 
-        // Total XP earned across the quiz: 6 (Q1 on 3rd try) + 0 (Q2 on 4th try) = 6 XP
-        assertEquals(6L, reportedEarnedXp)
-        composeRule.onNodeWithText("+6 XP gagnés").performScrollTo().assertIsDisplayed()
+        // Total XP earned across the quiz: 0 (Q1 failed in main pass & solved in remediation) + 12 (Q2 on 2nd try) = 12 XP
+        assertEquals(12L, reportedEarnedXp)
+        composeRule.onNodeWithText("+12 XP gagnés").performScrollTo().assertIsDisplayed()
     }
 
     @Test

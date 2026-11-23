@@ -86,146 +86,21 @@ fun subjectShortLabel(subject: String): String = when (subject) {
 }
 
 /**
- * Cheerful golden-yellow star mascot with smiling eyes, rosy cheeks, tiny arms and sparkle rays.
+ * Animated Quizzy explorer fennec fox mascot (backward-compatible entry point).
  */
 @Composable
 fun QuizzyStarMascot(
     modifier: Modifier = Modifier,
-    size: Dp = 88.dp
+    size: Dp = 88.dp,
+    mood: QuizzyMascotMood = QuizzyMascotMood.IDLE,
+    interactive: Boolean = true
 ) {
-    Canvas(modifier = modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val cx = w * 0.50f
-        val cy = h * 0.53f
-        val outerR = w * 0.40f
-        val innerR = w * 0.23f
-
-        // Little cheerful sparkle rays top-left
-        val rayColor = MascotYellowDeep
-        drawLine(
-            color = rayColor,
-            start = Offset(w * 0.08f, h * 0.24f),
-            end = Offset(w * 0.17f, h * 0.30f),
-            strokeWidth = w * 0.036f,
-            cap = StrokeCap.Round
-        )
-        drawLine(
-            color = rayColor,
-            start = Offset(w * 0.16f, h * 0.12f),
-            end = Offset(w * 0.23f, h * 0.21f),
-            strokeWidth = w * 0.036f,
-            cap = StrokeCap.Round
-        )
-
-        // Soft shadow underneath the mascot
-        drawOval(
-            color = Color(0xFF1A2749).copy(alpha = 0.08f),
-            topLeft = Offset(cx - w * 0.24f, h * 0.89f),
-            size = Size(w * 0.48f, h * 0.08f)
-        )
-
-        // Rounded 5-point star path (using quadratic curves at tips for soft friendly look)
-        val starPath = Path()
-        val points = 5
-        val vertices = mutableListOf<Offset>()
-        for (i in 0 until points * 2) {
-            val angleDeg = -90.0 + i * 36.0
-            val rad = angleDeg * PI / 180.0
-            val r = if (i % 2 == 0) outerR else innerR
-            vertices.add(Offset(cx + (r * cos(rad)).toFloat(), cy + (r * sin(rad)).toFloat()))
-        }
-        val midpoints = vertices.indices.map { i ->
-            val curr = vertices[i]
-            val next = vertices[(i + 1) % vertices.size]
-            Offset((curr.x + next.x) / 2f, (curr.y + next.y) / 2f)
-        }
-        starPath.moveTo(midpoints.last().x, midpoints.last().y)
-        for (i in vertices.indices) {
-            val v = vertices[i]
-            val m = midpoints[i]
-            starPath.quadraticTo(v.x, v.y, m.x, m.y)
-        }
-        starPath.close()
-
-        // Slight depth outline + fill
-        drawPath(
-            path = starPath,
-            color = MascotYellowDeep,
-            style = Stroke(width = w * 0.04f, join = StrokeJoin.Round)
-        )
-        drawPath(path = starPath, color = MascotYellow)
-
-        // Cute tiny raised arms
-        val armStroke = Stroke(width = w * 0.042f, cap = StrokeCap.Round)
-        val leftArm = Path().apply {
-            moveTo(cx - w * 0.20f, cy + h * 0.08f)
-            quadraticTo(cx - w * 0.34f, cy + h * 0.16f, cx - w * 0.30f, cy + h * 0.01f)
-        }
-        val rightArm = Path().apply {
-            moveTo(cx + w * 0.22f, cy + h * 0.06f)
-            quadraticTo(cx + w * 0.36f, cy + h * 0.04f, cx + w * 0.34f, cy - h * 0.08f)
-        }
-        drawPath(leftArm, color = OnWarmSurface, style = armStroke)
-        drawPath(rightArm, color = OnWarmSurface, style = armStroke)
-
-        // Rosy cheeks
-        drawCircle(
-            color = MascotCheekCoral.copy(alpha = 0.55f),
-            radius = w * 0.055f,
-            center = Offset(cx - w * 0.145f, cy + h * 0.045f)
-        )
-        drawCircle(
-            color = MascotCheekCoral.copy(alpha = 0.55f),
-            radius = w * 0.055f,
-            center = Offset(cx + w * 0.145f, cy + h * 0.045f)
-        )
-
-        // Happy curved eyes (^^)
-        val eyeStroke = Stroke(width = w * 0.036f, cap = StrokeCap.Round)
-        drawArc(
-            color = OnWarmSurface,
-            startAngle = 200f,
-            sweepAngle = 140f,
-            useCenter = false,
-            topLeft = Offset(cx - w * 0.14f, cy - h * 0.07f),
-            size = Size(w * 0.095f, h * 0.085f),
-            style = eyeStroke
-        )
-        drawArc(
-            color = OnWarmSurface,
-            startAngle = 200f,
-            sweepAngle = 140f,
-            useCenter = false,
-            topLeft = Offset(cx + w * 0.045f, cy - h * 0.07f),
-            size = Size(w * 0.095f, h * 0.085f),
-            style = eyeStroke
-        )
-
-        // Big cheerful smile
-        val smileRect = Rect(
-            left = cx - w * 0.085f,
-            top = cy + h * 0.015f,
-            right = cx + w * 0.085f,
-            bottom = cy + h * 0.125f
-        )
-        drawArc(
-            color = OnWarmSurface,
-            startAngle = 0f,
-            sweepAngle = 180f,
-            useCenter = true,
-            topLeft = smileRect.topLeft,
-            size = smileRect.size
-        )
-        drawArc(
-            color = MascotCheekCoral,
-            startAngle = 20f,
-            sweepAngle = 140f,
-            useCenter = true,
-            topLeft = Offset(smileRect.left + w * 0.025f, smileRect.top + h * 0.04f),
-            size = Size(smileRect.width - w * 0.05f, smileRect.height - h * 0.045f)
-        )
-    }
+    QuizzyAnimatedMascot(
+        mood = mood,
+        size = size,
+        modifier = modifier,
+        interactive = interactive
+    )
 }
 
 /**
@@ -562,7 +437,7 @@ fun LessonHeroIllustrationCard(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-                QuizzyStarMascot(size = 58.dp)
+                QuizzyStarMascot(size = 74.dp, mood = QuizzyMascotMood.THINKING)
             }
         }
     }

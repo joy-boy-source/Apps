@@ -53,6 +53,7 @@ import com.example.ui.components.ChildAvatarBadge
 import com.example.ui.components.MascotSpeechBubble
 import com.example.ui.components.ModernCard
 import com.example.ui.components.PinPadDialog
+import com.example.ui.components.QuizzyMascotMood
 import com.example.ui.components.QuizzyStarMascot
 import com.example.ui.components.QuizzyWordmarkLogo
 import com.example.ui.components.SuccessRateGauge
@@ -143,7 +144,7 @@ fun ProfilePortalScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    QuizzyStarMascot(size = 84.dp)
+                    QuizzyStarMascot(size = 98.dp, mood = QuizzyMascotMood.IDLE)
                     MascotSpeechBubble(
                         text = "Prêt pour les révisions ?\nChoisis ton profil !",
                         modifier = Modifier.weight(1f)

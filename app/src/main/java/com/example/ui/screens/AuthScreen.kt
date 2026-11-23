@@ -58,6 +58,7 @@ import com.example.data.attemptAutoSignIn
 import com.example.data.onGoogleSignInClicked
 import com.example.ui.components.MascotSpeechBubble
 import com.example.ui.components.QuizzyInlineLoader
+import com.example.ui.components.QuizzyMascotMood
 import com.example.ui.components.QuizzyStarMascot
 import com.example.ui.components.QuizzyWordmarkLogo
 import com.example.ui.theme.QuizzyTheme
@@ -140,7 +141,7 @@ fun AuthScreen(
                 horizontalArrangement = Arrangement.Center,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                QuizzyStarMascot(size = 96.dp)
+                QuizzyStarMascot(size = 112.dp, mood = QuizzyMascotMood.WAVE)
                 Spacer(Modifier.width(4.dp))
                 MascotSpeechBubble(
                     text = "Bienvenue !\nQui se connecte ?"

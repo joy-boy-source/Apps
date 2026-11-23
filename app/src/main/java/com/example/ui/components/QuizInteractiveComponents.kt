@@ -106,8 +106,8 @@ fun quizQuestionActivityMeta(question: QuizQuestion): Pair<String, ImageVector> 
 }
 
 /**
- * Illustrated visual banner shown on every quiz question so each exercise feels alive,
- * visual and playful rather than plain text A/B/C/D.
+ * Mature photorealistic editorial visual banner shown on every quiz question so each
+ * activity feels crisp, clear, and unmistakably recognizable.
  */
 @Composable
 fun QuizQuestionIllustrationCard(
@@ -127,11 +127,11 @@ fun QuizQuestionIllustrationCard(
     val captionText = remember(question.illustrationCaption, resolvedKey) {
         question.illustrationCaption.trim().ifBlank {
             when (resolvedKey) {
-                QuizQuestion.ILLUS_MATH -> "Observe, réfléchis et relève ce défi mathématique !"
-                QuizQuestion.ILLUS_ENGLISH -> "Prêt(e) pour ce petit jeu d'anglais ?"
-                QuizQuestion.ILLUS_SCIENCE -> "Enfile ta blouse de jeune scientifique !"
-                QuizQuestion.ILLUS_HISTORY -> "Explore la carte et le temps pour trouver !"
-                else -> "Lis bien chaque indice comme un vrai détective des mots !"
+                QuizQuestion.ILLUS_MATH -> "Observe, analyse et résous ce défi mathématique."
+                QuizQuestion.ILLUS_ENGLISH -> "Prêt(e) à relever ce défi d'anglais ?"
+                QuizQuestion.ILLUS_SCIENCE -> "Observe attentivement comme un vrai scientifique."
+                QuizQuestion.ILLUS_HISTORY -> "Explore les repères historiques et géographiques."
+                else -> "Analyse chaque détail et chaque nuance du texte."
             }
         }
     }
@@ -140,7 +140,7 @@ fun QuizQuestionIllustrationCard(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(132.dp)
+            .height(156.dp)
             .testTag("quiz_illustration_card"),
         shape = RoundedCornerShape(22.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -156,15 +156,15 @@ fun QuizQuestionIllustrationCard(
                     .testTag("quiz_illustration_image")
             )
 
-            // Soft bottom scrim for legible caption pill
+            // Smooth editorial dark scrim at bottom for high-contrast legible caption
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(68.dp)
+                    .height(74.dp)
                     .align(Alignment.BottomCenter)
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color(0xAA102247))
+                            colors = listOf(Color.Transparent, Color(0xCC0A1833))
                         )
                     )
             )

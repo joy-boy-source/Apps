@@ -73,6 +73,7 @@ service cloud.firestore {
              (!('weakPoints' in data) || (data.weakPoints is list && data.weakPoints.size() <= 40)) &&
              (!('weeklyMissedQuestions' in data) || (data.weeklyMissedQuestions is list && data.weeklyMissedQuestions.size() <= 40)) &&
              (!('lastSundayQuizWeekKey' in data) || data.lastSundayQuizWeekKey == null || (data.lastSundayQuizWeekKey is string && data.lastSundayQuizWeekKey.size() <= 20)) &&
+             (!('languageToneLevel' in data) || (data.languageToneLevel in ['AUTO', 'SIMPLIFIED', 'STANDARD', 'MATURE', 'ADVANCED'])) &&
              data.createdAt is timestamp && data.createdAt <= request.time &&
              data.updatedAt is timestamp && data.updatedAt <= request.time;
     }
@@ -233,7 +234,7 @@ service cloud.firestore {
                          isValidChildProfile(incoming()) &&
                          incoming().familyId == familyId &&
                          incoming().keys().hasAll(['familyId', 'ownerId', 'memberUids', 'name', 'age', 'gradeLevel', 'avatarKey', 'pinHash', 'lessonsCount', 'quizzesTaken', 'totalCorrect', 'totalQuestions', 'createdAt', 'updatedAt']) &&
-                         incoming().keys().hasOnly(['familyId', 'ownerId', 'memberUids', 'linkedUid', 'name', 'age', 'gradeLevel', 'avatarKey', 'pinHash', 'lessonsCount', 'quizzesTaken', 'totalCorrect', 'totalQuestions', 'xp', 'bestStreak', 'badges', 'acquiredSkills', 'weakPoints', 'weeklyMissedQuestions', 'lastSundayQuizWeekKey', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['familyId', 'ownerId', 'memberUids', 'linkedUid', 'name', 'age', 'gradeLevel', 'avatarKey', 'pinHash', 'languageToneLevel', 'lessonsCount', 'quizzesTaken', 'totalCorrect', 'totalQuestions', 'xp', 'bestStreak', 'badges', 'acquiredSkills', 'weakPoints', 'weeklyMissedQuestions', 'lastSundayQuizWeekKey', 'createdAt', 'updatedAt']) &&
                          exists(/databases/$(database)/documents/families/$(familyId)) &&
                          request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUids &&
                          incoming().ownerId == get(/databases/$(database)/documents/families/$(familyId)).data.ownerId &&
@@ -246,7 +247,7 @@ service cloud.firestore {
                          incoming().familyId == existing().familyId &&
                          incoming().ownerId == existing().ownerId &&
                          incoming().createdAt == existing().createdAt &&
-                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'age', 'gradeLevel', 'avatarKey', 'pinHash', 'linkedUid', 'memberUids', 'lessonsCount', 'quizzesTaken', 'totalCorrect', 'totalQuestions', 'xp', 'bestStreak', 'badges', 'acquiredSkills', 'weakPoints', 'weeklyMissedQuestions', 'lastSundayQuizWeekKey', 'updatedAt']);
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'age', 'gradeLevel', 'avatarKey', 'pinHash', 'languageToneLevel', 'linkedUid', 'memberUids', 'lessonsCount', 'quizzesTaken', 'totalCorrect', 'totalQuestions', 'xp', 'bestStreak', 'badges', 'acquiredSkills', 'weakPoints', 'weeklyMissedQuestions', 'lastSundayQuizWeekKey', 'updatedAt']);
         allow delete: if isSignedIn() && isValidId(familyId) && isValidId(childId) && request.auth.uid == existing().ownerId;
       }
 

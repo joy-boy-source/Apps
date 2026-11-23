@@ -8,8 +8,16 @@ import com.example.data.CourseAttachment
 import com.example.data.FamilyRepository
 import com.example.data.FrenchErrorMessages
 import com.example.data.GeminiTutorService
+import com.example.data.local.ChildSqlOverview
+import com.example.data.local.GameScoreEntity
+import com.example.data.local.LocalSqlRepository
+import com.example.data.local.StudioImageEntity
+import com.example.data.local.SubjectSqlStats
 import com.example.model.ChildProfile
+import com.example.model.ExerciseItem
+import com.example.model.ExerciseSheet
 import com.example.model.Family
+import com.example.model.LanguageToneCatalog
 import com.example.model.Lesson
 import com.example.model.MissedQuestionRecord
 import com.example.model.PinHasher
@@ -23,6 +31,7 @@ import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -53,8 +62,20 @@ sealed interface ActiveSession {
 sealed interface OperationStatus {
     data object Idle : OperationStatus
     data class Busy(val message: String) : OperationStatus
-    data class Success(val message: String, val createdLessonId: String? = null, val createdQuizId: String? = null) : OperationStatus
+    data class Success(
+        val message: String,
+        val createdLessonId: String? = null,
+        val createdQuizId: String? = null,
+        val createdExerciseId: String? = null
+    ) : OperationStatus
     data class Error(val message: String) : OperationStatus
+}
+
+sealed interface ImageStudioUiState {
+    data object Idle : ImageStudioUiState
+    data class Loading(val message: String) : ImageStudioUiState
+    data class Success(val bitmap: Bitmap, val prompt: String, val isEdited: Boolean) : ImageStudioUiState
+    data class Error(val message: String) : ImageStudioUiState
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -62,7 +83,8 @@ class EduFamilleViewModel(
     private val repository: FamilyRepository,
     private val geminiService: GeminiTutorService,
     val currentUserId: String,
-    val defaultDisplayName: String
+    val defaultDisplayName: String,
+    private val localSqlRepository: LocalSqlRepository? = null
 ) : ViewModel() {
 
     val bundleState: StateFlow<UiState<FamilyBundle>> =
@@ -119,6 +141,15 @@ class EduFamilleViewModel(
     private val _opStatus = MutableStateFlow<OperationStatus>(OperationStatus.Idle)
     val opStatus: StateFlow<OperationStatus> = _opStatus.asStateFlow()
 
+    private val _exerciseOpStatus = MutableStateFlow<OperationStatus>(OperationStatus.Idle)
+    val exerciseOpStatus: StateFlow<OperationStatus> = _exerciseOpStatus.asStateFlow()
+
+    private val _gradingExerciseItemKeys = MutableStateFlow<Set<String>>(emptySet())
+    val gradingExerciseItemKeys: StateFlow<Set<String>> = _gradingExerciseItemKeys.asStateFlow()
+
+    private val _finalizingExerciseSheetIds = MutableStateFlow<Set<String>>(emptySet())
+    val finalizingExerciseSheetIds: StateFlow<Set<String>> = _finalizingExerciseSheetIds.asStateFlow()
+
     private val _pinError = MutableStateFlow<String?>(null)
     val pinError: StateFlow<String?> = _pinError.asStateFlow()
 
@@ -130,6 +161,40 @@ class EduFamilleViewModel(
     val transcribeError: StateFlow<String?> = _transcribeError.asStateFlow()
 
     private var transcribeJob: Job? = null
+
+    private val _imageStudioState = MutableStateFlow<ImageStudioUiState>(ImageStudioUiState.Idle)
+    val imageStudioState: StateFlow<ImageStudioUiState> = _imageStudioState.asStateFlow()
+    private var imageStudioJob: Job? = null
+
+    val allTopGameScores: StateFlow<List<GameScoreEntity>> =
+        (localSqlRepository?.observeAllTopGameScores() ?: flowOf(emptyList()))
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
+
+    val allStudioImages: StateFlow<List<StudioImageEntity>> =
+        (localSqlRepository?.observeAllStudioImages() ?: flowOf(emptyList()))
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
+
+    val allSubjectSqlStats: StateFlow<List<SubjectSqlStats>> =
+        (localSqlRepository?.observeAllSubjectStats() ?: flowOf(emptyList()))
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
+
+    fun observeChildGameScores(childId: String): Flow<List<GameScoreEntity>> =
+        localSqlRepository?.observeGameScoresForChild(childId) ?: flowOf(emptyList())
+
+    fun observeChildStudioImages(childId: String): Flow<List<StudioImageEntity>> =
+        localSqlRepository?.observeStudioImagesForChild(childId) ?: flowOf(emptyList())
+
+    fun observeChildSubjectSqlStats(childId: String): Flow<List<SubjectSqlStats>> =
+        localSqlRepository?.observeSubjectStatsForChild(childId) ?: flowOf(emptyList())
+
+    fun observeChildSqlOverview(childId: String): Flow<ChildSqlOverview> =
+        localSqlRepository?.observeChildSqlOverview(childId) ?: flowOf(ChildSqlOverview())
+
+    fun resetImageStudioState() {
+        imageStudioJob?.cancel()
+        imageStudioJob = null
+        _imageStudioState.value = ImageStudioUiState.Idle
+    }
 
     fun clearOperationStatus() {
         _opStatus.value = OperationStatus.Idle
@@ -296,11 +361,20 @@ class EduFamilleViewModel(
         age: Int,
         gradeLevel: String,
         avatarKey: String,
-        pin: String
+        pin: String,
+        languageToneLevel: String = LanguageToneCatalog.AUTO
     ) {
         viewModelScope.launch {
             _opStatus.value = OperationStatus.Busy("Ajout du profil...")
-            repository.addChildProfile(family, name, age, gradeLevel, avatarKey, pin).fold(
+            repository.addChildProfile(
+                family = family,
+                name = name,
+                age = age,
+                gradeLevel = gradeLevel,
+                avatarKey = avatarKey,
+                pin = pin,
+                languageToneLevel = languageToneLevel
+            ).fold(
                 onSuccess = {
                     _opStatus.value = OperationStatus.Success("Profil de $name ajouté !")
                 },
@@ -336,17 +410,51 @@ class EduFamilleViewModel(
         age: Int,
         gradeLevel: String,
         avatarKey: String,
-        newPin: String?
+        newPin: String?,
+        languageToneLevel: String? = null
     ) {
         viewModelScope.launch {
             _opStatus.value = OperationStatus.Busy("Mise à jour...")
-            repository.updateChildProfileAdmin(familyId, childId, name, age, gradeLevel, avatarKey, newPin).fold(
+            repository.updateChildProfileAdmin(
+                familyId = familyId,
+                childId = childId,
+                name = name,
+                age = age,
+                gradeLevel = gradeLevel,
+                avatarKey = avatarKey,
+                newPin = newPin,
+                languageToneLevel = languageToneLevel
+            ).fold(
                 onSuccess = {
                     _opStatus.value = OperationStatus.Success("Profil mis à jour !")
                 },
                 onFailure = { e ->
                     _opStatus.value = OperationStatus.Error(
                         FrenchErrorMessages.toFrenchError(e, "Erreur lors de la modification du profil.")
+                    )
+                }
+            )
+        }
+    }
+
+    fun updateChildLanguageTone(
+        familyId: String,
+        childId: String,
+        languageToneLevel: String
+    ) {
+        val normalized = LanguageToneCatalog.normalize(languageToneLevel)
+        val option = LanguageToneCatalog.optionFor(normalized)
+        viewModelScope.launch {
+            _opStatus.value = OperationStatus.Busy("Mise à jour du niveau de langage...")
+            repository.updateChildLanguageTone(familyId, childId, normalized).fold(
+                onSuccess = {
+                    _opStatus.value = OperationStatus.Success(
+                        "Niveau de langage défini sur « ${option.title} » !"
+                    )
+                },
+                onFailure = { e ->
+                    _opStatus.value = OperationStatus.Error(
+                        FrenchErrorMessages.toFrenchError(e, "Impossible de modifier le niveau de langage.")
                     )
                 }
             )
@@ -404,7 +512,8 @@ class EduFamilleViewModel(
                 childName = child.name,
                 childAge = child.age.toInt(),
                 gradeLevel = child.gradeLevel,
-                existingWeakPoints = child.weakPoints
+                existingWeakPoints = child.weakPoints,
+                languageToneLevel = child.languageToneLevel
             )
             aiResult.fold(
                 onSuccess = { generated ->
@@ -467,7 +576,8 @@ class EduFamilleViewModel(
                 childName = child.name,
                 childAge = child.age.toInt(),
                 gradeLevel = child.gradeLevel,
-                existingWeakPoints = child.weakPoints
+                existingWeakPoints = child.weakPoints,
+                languageToneLevel = child.languageToneLevel
             )
             aiResult.fold(
                 onSuccess = { generated ->
@@ -522,7 +632,8 @@ class EduFamilleViewModel(
                 gradeLevel = child.gradeLevel,
                 difficulty = difficulty,
                 existingQuizCount = lesson.quizCount.toInt(),
-                childWeakPoints = combinedGaps
+                childWeakPoints = combinedGaps,
+                languageToneLevel = child.languageToneLevel
             )
             aiResult.fold(
                 onSuccess = { generated ->
@@ -572,7 +683,8 @@ class EduFamilleViewModel(
                 childAge = child.age.toInt(),
                 gradeLevel = child.gradeLevel,
                 targetLesson = targetLesson,
-                weakPoints = child.weakPoints
+                weakPoints = child.weakPoints,
+                languageToneLevel = child.languageToneLevel
             )
             aiResult.fold(
                 onSuccess = { generated ->
@@ -624,7 +736,8 @@ class EduFamilleViewModel(
                 gradeLevel = child.gradeLevel,
                 missedQuestions = child.weeklyMissedQuestions,
                 lessons = childLessons,
-                difficulty = safeDifficulty
+                difficulty = safeDifficulty,
+                languageToneLevel = child.languageToneLevel
             )
             aiResult.fold(
                 onSuccess = { generated ->
@@ -683,11 +796,341 @@ class EduFamilleViewModel(
                 weakSkills = weakSkills,
                 earnedXpOverride = earnedXpOverride,
                 missedQuestions = missedQuestions
-            ).onFailure { e ->
+            ).onSuccess {
+                val pct = if (totalQuestions > 0) ((score * 100) / totalQuestions).coerceIn(0, 100) else 0
+                runCatching {
+                    localSqlRepository?.recordQuizStudyLog(
+                        childId = child.id,
+                        subject = quiz.subject.ifBlank { "Général" },
+                        scorePercent = pct,
+                        xpDelta = (earnedXpOverride ?: 0L).toInt()
+                    )
+                }
+            }.onFailure { e ->
                 _opStatus.value = OperationStatus.Error(
                     FrenchErrorMessages.toFrenchError(e, "Erreur lors de la sauvegarde du score.")
                 )
             }
+        }
+    }
+
+    // --- 3D Game & Room SQLite Persistence ---
+
+    fun record3DGameScore(
+        child: ChildProfile,
+        score: Int,
+        correctCount: Int,
+        totalQuestions: Int,
+        maxCombo: Int,
+        durationSeconds: Int,
+        subject: String
+    ) {
+        viewModelScope.launch {
+            runCatching {
+                localSqlRepository?.recordGameSession(
+                    childId = child.id,
+                    childName = child.name,
+                    subject = subject.ifBlank { "Général" },
+                    gameMode = "ARENA_3D",
+                    score = score,
+                    correctCount = correctCount,
+                    totalQuestions = totalQuestions,
+                    maxCombo = maxCombo,
+                    durationSeconds = durationSeconds
+                )
+            }.onFailure { e ->
+                Log.e(TAG, "Failed to save 3D game score in Room SQLite", e)
+            }
+        }
+    }
+
+    // --- Gemini Nano Banana 2.1 Image Studio ---
+
+    fun generateStudioImage(
+        child: ChildProfile,
+        prompt: String,
+        styleLabel: String,
+        subject: String
+    ) {
+        imageStudioJob?.cancel()
+        imageStudioJob = viewModelScope.launch {
+            _imageStudioState.value = ImageStudioUiState.Loading("Création de ton image avec Nano Banana 2.1...")
+            geminiService.generateEducationalImage(
+                prompt = prompt,
+                gradeLevel = child.gradeLevel,
+                childAge = child.age.toInt(),
+                onStatusUpdate = { statusMsg ->
+                    _imageStudioState.value = ImageStudioUiState.Loading(statusMsg)
+                }
+            ).fold(
+                onSuccess = { bitmap ->
+                    runCatching {
+                        localSqlRepository?.saveStudioImage(
+                            childId = child.id,
+                            prompt = prompt,
+                            editInstruction = "",
+                            subject = subject,
+                            styleLabel = styleLabel,
+                            bitmap = bitmap,
+                            isEdited = false
+                        )
+                    }
+                    _imageStudioState.value = ImageStudioUiState.Success(
+                        bitmap = bitmap,
+                        prompt = prompt,
+                        isEdited = false
+                    )
+                },
+                onFailure = { e ->
+                    _imageStudioState.value = ImageStudioUiState.Error(
+                        FrenchErrorMessages.toFrenchError(e, "Impossible de créer l'image IA pour le moment.")
+                    )
+                }
+            )
+        }
+    }
+
+    fun editStudioImage(
+        child: ChildProfile,
+        sourceBitmap: Bitmap,
+        editInstruction: String,
+        basePrompt: String,
+        subject: String
+    ) {
+        imageStudioJob?.cancel()
+        imageStudioJob = viewModelScope.launch {
+            _imageStudioState.value = ImageStudioUiState.Loading("Retouche de l'image avec Nano Banana 2.1...")
+            geminiService.editEducationalImage(
+                inputBitmap = sourceBitmap,
+                editInstruction = editInstruction,
+                onStatusUpdate = { statusMsg ->
+                    _imageStudioState.value = ImageStudioUiState.Loading(statusMsg)
+                }
+            ).fold(
+                onSuccess = { editedBitmap ->
+                    runCatching {
+                        localSqlRepository?.saveStudioImage(
+                            childId = child.id,
+                            prompt = basePrompt,
+                            editInstruction = editInstruction,
+                            subject = subject,
+                            styleLabel = "Retouche IA",
+                            bitmap = editedBitmap,
+                            isEdited = true
+                        )
+                    }
+                    _imageStudioState.value = ImageStudioUiState.Success(
+                        bitmap = editedBitmap,
+                        prompt = editInstruction,
+                        isEdited = true
+                    )
+                },
+                onFailure = { e ->
+                    _imageStudioState.value = ImageStudioUiState.Error(
+                        FrenchErrorMessages.toFrenchError(e, "Impossible de retoucher cette image pour le moment.")
+                    )
+                }
+            )
+        }
+    }
+
+    fun deleteStudioImage(item: StudioImageEntity) {
+        viewModelScope.launch {
+            runCatching { localSqlRepository?.deleteStudioImage(item) }
+        }
+    }
+
+    suspend fun loadStudioBitmap(imagePath: String): Bitmap? =
+        localSqlRepository?.loadStudioBitmap(imagePath)
+
+    // --- Verbatim School Exercise Tab (Room SQLite + Ultra-Fast Gemini Grading) ---
+
+    fun observeChildExerciseSheets(childId: String): Flow<List<ExerciseSheet>> =
+        localSqlRepository?.observeExerciseSheetsForChild(childId) ?: flowOf(emptyList())
+
+    fun clearExerciseOpStatus() {
+        _exerciseOpStatus.value = OperationStatus.Idle
+    }
+
+    fun createIdenticalExercise(
+        child: ChildProfile,
+        subject: String,
+        bitmap: Bitmap?,
+        attachments: List<CourseAttachment>,
+        notes: String
+    ) {
+        if (bitmap == null && attachments.isEmpty() && notes.isBlank()) {
+            _exerciseOpStatus.value = OperationStatus.Error(
+                "Ajoute une photo, un fichier ou le texte de ton exercice."
+            )
+            return
+        }
+        viewModelScope.launch {
+            _exerciseOpStatus.value = OperationStatus.Busy(
+                "Lecture et reproduction à l'identique de ton exercice..."
+            )
+            val result = geminiService.extractIdenticalExercise(
+                bitmap = bitmap,
+                attachments = attachments,
+                notes = notes,
+                selectedSubject = subject,
+                childAge = child.age.toInt(),
+                gradeLevel = child.gradeLevel
+            )
+            result.fold(
+                onSuccess = { extracted ->
+                    val sheet = ExerciseSheet(
+                        childId = child.id,
+                        subject = extracted.detectedSubject,
+                        title = extracted.title,
+                        generalInstructions = extracted.generalInstructions,
+                        items = extracted.items,
+                        sourceFileNames = attachments.map { it.fileName }
+                    )
+                    runCatching {
+                        localSqlRepository?.saveExerciseSheet(sheet)
+                    }.onSuccess {
+                        _exerciseOpStatus.value = OperationStatus.Success(
+                            message = "Exercice « ${sheet.title} » reproduit à l'identique !",
+                            createdExerciseId = sheet.id
+                        )
+                    }.onFailure { e ->
+                        _exerciseOpStatus.value = OperationStatus.Error(
+                            FrenchErrorMessages.toFrenchError(e, "Impossible d'enregistrer cet exercice localement.")
+                        )
+                    }
+                },
+                onFailure = { e ->
+                    _exerciseOpStatus.value = OperationStatus.Error(
+                        FrenchErrorMessages.toFrenchError(
+                            e,
+                            "Impossible de reproduire l'exercice pour le moment. Appuie sur « Réessayer »."
+                        )
+                    )
+                }
+            )
+        }
+    }
+
+    fun gradeExerciseItemAnswer(
+        child: ChildProfile,
+        sheet: ExerciseSheet,
+        item: ExerciseItem,
+        studentAnswer: String
+    ) {
+        val cleaned = studentAnswer.trim()
+        if (cleaned.isEmpty()) return
+        val key = "${sheet.id}:${item.id}"
+        if (key in _gradingExerciseItemKeys.value) return
+
+        viewModelScope.launch {
+            _gradingExerciseItemKeys.value = _gradingExerciseItemKeys.value + key
+            try {
+                // Save student answer immediately and clear any previous error
+                localSqlRepository?.updateExerciseItem(sheet.id, item.id) { current ->
+                    current.copy(studentAnswer = cleaned, gradingError = null)
+                }
+                val gradeResult = geminiService.gradeExerciseAnswer(
+                    subject = sheet.subject,
+                    gradeLevel = child.gradeLevel,
+                    childAge = child.age.toInt(),
+                    generalInstructions = sheet.generalInstructions,
+                    item = item,
+                    studentAnswer = cleaned,
+                    languageToneLevel = child.languageToneLevel
+                )
+                gradeResult.fold(
+                    onSuccess = { graded ->
+                        localSqlRepository?.updateExerciseItem(sheet.id, item.id) { current ->
+                            current.copy(
+                                studentAnswer = cleaned,
+                                verdict = graded.verdict,
+                                aiExplanation = graded.explanation,
+                                gradingError = null
+                            )
+                        }
+                    },
+                    onFailure = { e ->
+                        val friendlyErr = FrenchErrorMessages.toFrenchError(
+                            e,
+                            "La vérification IA a pris trop de temps. Appuie sur « Réessayer la vérification »."
+                        )
+                        localSqlRepository?.updateExerciseItem(sheet.id, item.id) { current ->
+                            current.copy(
+                                studentAnswer = cleaned,
+                                gradingError = friendlyErr
+                            )
+                        }
+                    }
+                )
+            } finally {
+                _gradingExerciseItemKeys.value = _gradingExerciseItemKeys.value - key
+            }
+        }
+    }
+
+    fun finalizeExerciseSheet(
+        child: ChildProfile,
+        sheet: ExerciseSheet,
+        draftAnswersByItemId: Map<String, String> = emptyMap()
+    ) {
+        if (sheet.id in _finalizingExerciseSheetIds.value) return
+        viewModelScope.launch {
+            _finalizingExerciseSheetIds.value = _finalizingExerciseSheetIds.value + sheet.id
+            try {
+                val mergedItems = sheet.items.map { item ->
+                    val draft = draftAnswersByItemId[item.id]?.trim()
+                    if (draft != null && draft != item.studentAnswer) {
+                        item.copy(studentAnswer = draft)
+                    } else {
+                        item
+                    }
+                }
+                val updatedSheet = sheet.copy(items = mergedItems, finalEvaluationError = null)
+                runCatching {
+                    localSqlRepository?.updateExerciseSheetDrafts(sheet.id, draftAnswersByItemId)
+                }
+
+                val evalResult = geminiService.evaluateCompleteExercise(
+                    childName = child.name,
+                    childAge = child.age.toInt(),
+                    gradeLevel = child.gradeLevel,
+                    sheet = updatedSheet,
+                    languageToneLevel = child.languageToneLevel
+                )
+                evalResult.fold(
+                    onSuccess = { evaluation ->
+                        runCatching {
+                            localSqlRepository?.updateExerciseSheetEvaluation(
+                                sheetId = sheet.id,
+                                evaluation = evaluation,
+                                error = null
+                            )
+                        }
+                    },
+                    onFailure = { e ->
+                        val friendlyErr = FrenchErrorMessages.toFrenchError(
+                            e,
+                            "Impossible de calculer la note sur 20 pour le moment. Appuie sur « Réessayer »."
+                        )
+                        runCatching {
+                            localSqlRepository?.updateExerciseSheetEvaluation(
+                                sheetId = sheet.id,
+                                evaluation = sheet.finalEvaluation,
+                                error = friendlyErr
+                            )
+                        }
+                    }
+                )
+            } finally {
+                _finalizingExerciseSheetIds.value = _finalizingExerciseSheetIds.value - sheet.id
+            }
+        }
+    }
+
+    fun deleteExerciseSheet(sheetId: String) {
+        viewModelScope.launch {
+            runCatching { localSqlRepository?.deleteExerciseSheet(sheetId) }
         }
     }
 
